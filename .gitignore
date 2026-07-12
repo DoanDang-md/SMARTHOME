@@ -60,3 +60,7 @@ py_out.txt
 .env
 *.pem
 secrets/
+
+# Ghi chu local, khong day len GitHub
+REFACTOR_NOTES.md
+
