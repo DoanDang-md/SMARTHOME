@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# SmartHome backend runtime
+SmartHome/smarthome.db
+SmartHome/*.db
+smarthome.db
+*.db
+SmartHome/gw_ip.cache
+gw_ip.cache
+SmartHome/.env
+*.cache
+
+# Node / Vite
+node_modules/
+nexushome-web/dist/
+nexushome-web/.env
+nexushome-web/.env.*
+!.env.example
+npm-debug.log*
+yarn-error.log*
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs / temp
+*.log
+pip_log.txt
+pip_install_out.txt
+check_env_out*.txt
+py_out.txt
+*_out.txt
+
+# Grok / local agent
+.grok/
+.claude/
+
+# Arduino build (if any)
+**/build/
+*.elf
+*.bin
+*.map
+
+# Secrets
+.env
+*.pem
+secrets/
