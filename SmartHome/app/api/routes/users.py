@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from app.api.dependencies import get_db, get_current_user
 from app.services.user_service import UserService
 import schemas, models
@@ -17,3 +18,14 @@ def get_user_permissions(user_id: int, db: Session = Depends(get_db)):
 @router.post("/{user_id}/permissions")
 def sync_user_permissions(user_id: int, data: schemas.PermissionSync, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     return UserService(db, current_user).sync_user_permissions(user_id, data)
+
+class TelegramLinkRequest(BaseModel):
+    telegram_id: str
+
+@router.get("/me")
+def get_my_profile(current_user: models.User = Depends(get_current_user)):
+    return UserService(None, current_user).get_my_profile()
+
+@router.post("/telegram/link")
+def link_telegram(data: TelegramLinkRequest, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    return UserService(db, current_user).link_telegram(data.telegram_id)

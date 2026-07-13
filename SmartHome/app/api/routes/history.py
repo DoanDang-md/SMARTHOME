@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_db, get_current_user
 import models
+from datetime import timedelta
 
 router = APIRouter(prefix="/api/history", tags=["History"])
 
@@ -19,13 +20,19 @@ def get_activity_history(db: Session = Depends(get_db), current_user: models.Use
     # Sắp xếp mới nhất lên đầu, giới hạn 100 dòng để tối ưu hiệu năng
     events = query.order_by(models.Event.timestamp.desc()).limit(100).all()
 
-    return [
-        {
+    result = []
+    for ev in events:
+        time_str = "N/A"
+        if ev[0].timestamp:
+            vn_time = ev[0].timestamp + timedelta(hours=7)
+            time_str = vn_time.strftime("%d/%m/%Y %H:%M:%S")
+
+        result.append({
             "id": ev[0].id,
             "username": ev[1] or "Hệ thống / Gateway",
             "device_name": ev[2] or "Thiết bị bị xóa",
             "action": ev[0].action,
-            "time": ev[0].timestamp.strftime("%d/%m/%Y %H:%M:%S") if ev[0].timestamp else "N/A"
-        }
-        for ev in events
-    ]
+            "time": time_str
+        })
+        
+    return result

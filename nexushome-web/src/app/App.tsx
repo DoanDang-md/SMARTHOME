@@ -15,6 +15,7 @@ import PendingUsers from "./components/figma/PendingUsers";
 import Dashboard from "./components/figma/Dashboard";
 import Permission from "./components/figma/PermissionPage";
 import HistoryPage from "./components/figma/HistoryPage";
+import SettingsPage from "./components/figma/SettingsPage";
 
 const ADMIN_LINKS = [
   { id: "dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
@@ -197,11 +198,7 @@ export default function App() {
       )}
       {activeNav === "history" && <HistoryPage />} {/* Render HistoryPage */}
       {/* Trang Settings có thể thêm vào đây sau */}
-      {activeNav === "settings" && (
-        <div className="flex-1 flex items-center justify-center text-slate-500">
-          <h2>Settings Module (Coming Soon)</h2>
-        </div>
-      )}
+      {activeNav === "settings" && <SettingsPage />}
     </div>
   );
 }

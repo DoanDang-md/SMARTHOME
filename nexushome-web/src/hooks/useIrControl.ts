@@ -16,7 +16,7 @@ export function useIrControl(deviceId: number, deviceType: number) {
 
   useEffect(() => {
     const fetchIrCommands = async () => {
-      if (deviceType !== 2 && deviceType !== 4) return;
+      if (deviceType !== 2) return;
       try {
         const token = localStorage.getItem("nexus_token");
         const res = await fetch(`http://localhost:8000/api/ir/${deviceId}`, {

@@ -54,7 +54,7 @@ export default function DeviceCard({
   } = useIrControl(device.id, device.device_type);
 
   const hasRelayControl = device.device_type === 1 || device.device_type === 4;
-  const hasIrControl = device.device_type === 2 || device.device_type === 4;
+  const hasIrControl = device.device_type === 2;
   const hasSensors =
     device.device_type === 3 ||
     device.device_type === 4 ||
