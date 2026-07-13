@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database import engine
@@ -6,8 +8,26 @@ import models
 # 1. Khởi tạo Database
 models.Base.metadata.create_all(bind=engine)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Long-polling Telegram: nhận tin local, không cần ngrok
+    from app.api.routes.telegram import TELEGRAM_BOT_TOKEN
+    from app.services.telegram_poller import start_telegram_polling, stop_telegram_polling
+
+    start_telegram_polling(TELEGRAM_BOT_TOKEN)
+    try:
+        yield
+    finally:
+        stop_telegram_polling()
+
+
 # 2. Khởi tạo Ứng dụng
-app = FastAPI(title="SmartHome API", description="Mô hình OOP - 3 Layer Architecture")
+app = FastAPI(
+    title="SmartHome API",
+    description="Mô hình OOP - 3 Layer Architecture",
+    lifespan=lifespan,
+)
 
 # 3. Cấu hình CORS
 app.add_middleware(

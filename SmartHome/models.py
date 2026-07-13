@@ -8,9 +8,20 @@ class User(Base):
     username = Column(String(50), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     role = Column(String(20), default="user")
+    # Legacy: 1 user = 1 telegram. Ưu tiên bảng user_telegrams (nhiều ID).
     telegram_id = Column(String(50), unique=True)
 
     is_approved = Column(Boolean, default=False)
+
+
+class UserTelegram(Base):
+    """Một tài khoản hệ thống có thể liên kết nhiều Telegram ID."""
+    __tablename__ = "user_telegrams"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    telegram_id = Column(String(50), unique=True, nullable=False, index=True)
+    label = Column(String(100), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class Device(Base):
     __tablename__ = "devices"

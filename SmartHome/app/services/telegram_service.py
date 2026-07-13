@@ -3,23 +3,50 @@ import models
 import requests
 from app.services.device_service import DeviceService
 
+
 class TelegramBotService:
     def __init__(self, db: Session, bot_token: str):
         self.db = db
         self.bot_token = bot_token
         self.api_url = f"https://api.telegram.org/bot{self.bot_token}"
 
+    def _find_user_by_telegram(self, chat_id: str):
+        """Tìm user theo Telegram ID (bảng nhiều liên kết + legacy users.telegram_id)."""
+        if not chat_id or chat_id == "None":
+            return None
+        link = (
+            self.db.query(models.UserTelegram)
+            .filter(models.UserTelegram.telegram_id == str(chat_id))
+            .first()
+        )
+        if link:
+            return self.db.query(models.User).filter(models.User.id == link.user_id).first()
+        return (
+            self.db.query(models.User)
+            .filter(models.User.telegram_id == str(chat_id))
+            .first()
+        )
+
+    def _tg_post(self, method: str, payload: dict, timeout: float = 3.0) -> None:
+        try:
+            requests.post(f"{self.api_url}/{method}", json=payload, timeout=timeout)
+        except Exception as e:
+            print(f"[WARN] Telegram {method}: {e}")
+
+    def answer_callback(self, callback_id: str, text: str = "", show_alert: bool = False) -> None:
+        """Trả lời nút ngay — tắt vòng xoay loading trên Telegram."""
+        if not callback_id:
+            return
+        payload = {"callback_query_id": callback_id, "show_alert": show_alert}
+        if text:
+            payload["text"] = text
+        self._tg_post("answerCallbackQuery", payload, timeout=2.0)
+
     def send_message(self, chat_id: str, text: str, reply_markup=None):
-        url = f"{self.api_url}/sendMessage"
         payload = {"chat_id": chat_id, "text": text}
-        # Nhúng thêm bộ bàn phím (Nút bấm) nếu có
         if reply_markup:
             payload["reply_markup"] = reply_markup
-            
-        try:
-            requests.post(url, json=payload, timeout=2.0)
-        except Exception as e:
-            print(f"[WARN] Lỗi gửi tin nhắn Telegram: {e}")
+        self._tg_post("sendMessage", payload, timeout=3.0)
 
     def process_webhook(self, update_data: dict):
         # 1. XỬ LÝ KHI NGƯỜI DÙNG BẤM NÚT (Callback Query)
@@ -35,10 +62,14 @@ class TelegramBotService:
         if not chat_id or not text or chat_id == "None":
             return
 
-        # Xác thực bảo mật: Có nằm trong hệ thống không?
-        user = self.db.query(models.User).filter(models.User.telegram_id == chat_id).first()
+        # Xác thực: chat_id nằm trong bất kỳ liên kết nào của user
+        user = self._find_user_by_telegram(chat_id)
         if not user:
-            self.send_message(chat_id, f"⚠️ Truy cập bị từ chối! ID Telegram của bạn là {chat_id}. Hãy báo Admin cập nhật vào hệ thống.")
+            self.send_message(
+                chat_id,
+                f"⚠️ Truy cập bị từ chối! ID Telegram của bạn là {chat_id}. "
+                f"Vào web → Settings → Liên kết Telegram (có thể gắn nhiều tài khoản).",
+            )
             return
 
         # Lệnh kích hoạt bảng điều khiển
@@ -86,57 +117,59 @@ class TelegramBotService:
         self.send_message(chat_id, "🎛 BẢNG ĐIỀU KHIỂN THIẾT BỊ:", reply_markup)
 
     def _handle_button_click(self, callback_query: dict):
-        # Lấy thông tin từ sự kiện bấm nút
         chat_id = str(callback_query.get("message", {}).get("chat", {}).get("id"))
         data = callback_query.get("data", "")
         callback_id = callback_query.get("id")
 
-        # Phản hồi lại ngay lập tức để tắt vòng xoay loading trên nút Telegram
+        # Nút tiêu đề (không điều khiển)
         if data == "ignore":
-            requests.post(f"{self.api_url}/answerCallbackQuery", json={"callback_query_id": callback_id})
+            self.answer_callback(callback_id)
             return
 
-        user = self.db.query(models.User).filter(models.User.telegram_id == chat_id).first()
+        user = self._find_user_by_telegram(chat_id)
         if not user:
+            self.answer_callback(callback_id, "Chưa liên kết tài khoản!")
             return
 
-        # Giải mã chuỗi lệnh từ nút bấm (Ví dụ: "cmd_ON_3")
-        if data.startswith("cmd_"):
-            parts = data.split("_")
-            action = parts[1]  # 'ON' hoặc 'OFF'
-            device_id = int(parts[2]) # '3'
-            target_status = 1 if action == "ON" else 0
+        if not data.startswith("cmd_"):
+            self.answer_callback(callback_id)
+            return
 
-            device = self.db.query(models.Device).filter(models.Device.id == device_id).first()
-            if not device:
-                requests.post(f"{self.api_url}/answerCallbackQuery", json={"callback_query_id": callback_id, "text": "Thiết bị không tồn tại!"})
-                return
+        # Giải mã: "cmd_ON_3"
+        parts = data.split("_")
+        if len(parts) < 3:
+            self.answer_callback(callback_id, "Lệnh không hợp lệ")
+            return
 
-            try:
-                # Gọi thẳng hàm update_status của API (Tái sử dụng code)
-                device_service = DeviceService(self.db, user)
-                device_service.update_status(device_id, target_status)
+        action = parts[1]  # ON / OFF
+        try:
+            device_id = int(parts[2])
+        except ValueError:
+            self.answer_callback(callback_id, "Lệnh không hợp lệ")
+            return
 
-                # Ghi lịch sử hoạt động vào bảng Event
-                action_desc = "TURN_ON" if target_status == 1 else "TURN_OFF"
-                new_event = models.Event(
-                    user_id=user.id,
-                    device_id=device.id,
-                    action=action_desc,
-                    status="SUCCESS"
-                )
-                self.db.add(new_event)
-                self.db.commit()
+        target_status = 1 if action == "ON" else 0
+        device = self.db.query(models.Device).filter(models.Device.id == device_id).first()
+        if not device:
+            self.answer_callback(callback_id, "Thiết bị không tồn tại!", show_alert=True)
+            return
 
-                # Tắt vòng xoay kèm chữ hiện lên
-                requests.post(f"{self.api_url}/answerCallbackQuery", json={"callback_query_id": callback_id, "text": "Thành công!"})
-                self.send_message(chat_id, f"✅ Đã {'BẬT' if target_status == 1 else 'TẮT'} thành công: {device.name}")
-                
-            except Exception as e:
-                # Bắt lỗi mất kết nối Gateway
-                error_msg = getattr(e, 'detail', str(e))
-                requests.post(f"{self.api_url}/answerCallbackQuery", json={"callback_query_id": callback_id, "text": "Lỗi phần cứng!"})
-                self.send_message(chat_id, f"⚠️ Lỗi điều khiển: {error_msg}")
+        # Quan trọng: trả lời nút TRƯỚC khi gọi Gateway (tránh spinner 1–3s)
+        self.answer_callback(
+            callback_id,
+            f"Đang {'bật' if target_status == 1 else 'tắt'} {device.name}…",
+        )
+
+        try:
+            # update_status đã ghi Event — không ghi trùng
+            DeviceService(self.db, user).update_status(device_id, target_status)
+            self.send_message(
+                chat_id,
+                f"✅ Đã {'BẬT' if target_status == 1 else 'TẮT'}: {device.name}",
+            )
+        except Exception as e:
+            error_msg = getattr(e, "detail", str(e))
+            self.send_message(chat_id, f"⚠️ Lỗi điều khiển: {error_msg}")
 
     def _report_status(self, chat_id: str):
         devices = self.db.query(models.Device).all()
