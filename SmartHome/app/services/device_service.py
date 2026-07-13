@@ -105,7 +105,9 @@ class DeviceService:
         return {"message": "Đăng ký thành công!", "device_id": new_device.id}
 
     def register_from_gateway(self, data: schemas.GatewayDeviceRegister):
-        """Gateway local /save — không JWT. Trùng MAC → trả device_id hiện có."""
+        """Gateway local /save — không JWT. Trùng MAC → trả device_id hiện có.
+        Nếu Gateway gửi node_id và id đó còn trống → dùng cùng ID (đồng bộ slot).
+        """
         mac = _norm_mac(data.mac_address)
         dtype = data.resolved_device_type()
         existing = self._find_device_by_mac(mac)
@@ -116,12 +118,31 @@ class DeviceService:
                 "status": "exists",
             }
 
-        new_device = models.Device(
-            name=data.name or "Thiết bị",
-            mac_address=mac,
-            device_type=dtype,
-            status=0,
-        )
+        wanted_id = data.node_id
+        use_id = None
+        if wanted_id is not None and int(wanted_id) >= 1:
+            wid = int(wanted_id)
+            taken = (
+                self.db.query(models.Device).filter(models.Device.id == wid).first()
+            )
+            if not taken:
+                use_id = wid
+
+        if use_id is not None:
+            new_device = models.Device(
+                id=use_id,
+                name=data.name or "Thiết bị",
+                mac_address=mac,
+                device_type=dtype,
+                status=0,
+            )
+        else:
+            new_device = models.Device(
+                name=data.name or "Thiết bị",
+                mac_address=mac,
+                device_type=dtype,
+                status=0,
+            )
         self.db.add(new_device)
         self.db.commit()
         self.db.refresh(new_device)
@@ -173,27 +194,74 @@ class DeviceService:
         self.db.commit()
         return {"status": "success", "device": {"id": device_id, "status": device.status}}
 
-    def delete_device(self, device_id: int):
-        self._verify_admin()
-        device = self.db.query(models.Device).filter(models.Device.id == device_id).first()
-        if not device:
-            raise HTTPException(status_code=404, detail="Không tìm thấy")
+    def _purge_device_row(self, device: models.Device) -> dict:
+        """Xóa device + quan hệ trong DB. Trả metadata trước khi mất object."""
+        device_id = device.id
+        mac = device.mac_address
+        name = device.name
 
         self.db.query(models.Event).filter(models.Event.device_id == device_id).delete()
         self.db.query(models.IRCommand).filter(models.IRCommand.device_id == device_id).delete()
         self.db.query(models.DevicePermission).filter(
             models.DevicePermission.device_id == device_id
         ).delete()
+        if hasattr(models, "TelegramCommand"):
+            self.db.query(models.TelegramCommand).filter(
+                models.TelegramCommand.device_id == device_id
+            ).delete()
         self.db.delete(device)
         self.db.commit()
+        return {"id": device_id, "mac_address": mac, "name": name}
 
+    def _notify_gateway_delete(self, device_id: int) -> None:
+        if not gateway.active_ip:
+            return
         try:
             requests.get(
-                f"http://{gateway.active_ip}/api/delete?id={device_id}", timeout=2.0
+                f"http://{gateway.active_ip}/api/delete?id={device_id}",
+                timeout=2.0,
             )
         except Exception:
             pass
-        return {"message": "Đã xóa thiết bị"}
+
+    def delete_device(self, device_id: int):
+        """Web/admin xóa → DB + báo Gateway gỡ peer/slot."""
+        self._verify_admin()
+        device = self.db.query(models.Device).filter(models.Device.id == device_id).first()
+        if not device:
+            raise HTTPException(status_code=404, detail="Không tìm thấy")
+
+        info = self._purge_device_row(device)
+        self._notify_gateway_delete(info["id"])
+        return {"message": "Đã xóa thiết bị", "device": info}
+
+    def delete_from_gateway(self, device_id: int = None, mac_address: str = None):
+        """
+        Gateway UI xóa thiết bị → backend xóa theo MAC (ưu tiên) hoặc node_id.
+        Không JWT — chỉ gọi từ LAN Gateway (cùng pattern register_from_gateway).
+        """
+        device = None
+        if mac_address:
+            device = self._find_device_by_mac(mac_address)
+        if not device and device_id is not None:
+            device = (
+                self.db.query(models.Device)
+                .filter(models.Device.id == int(device_id))
+                .first()
+            )
+        if not device:
+            return {
+                "status": "not_found",
+                "message": "Backend không có thiết bị này (đã xóa hoặc chưa đồng bộ).",
+            }
+
+        info = self._purge_device_row(device)
+        # Không gọi lại Gateway /api/delete — Gateway đang xóa local
+        return {
+            "status": "deleted",
+            "message": f"Đã xóa «{info['name']}» trên backend",
+            "device": info,
+        }
 
     def receive_telemetry(self, data: schemas.SensorData):
         if data.gw_ip:

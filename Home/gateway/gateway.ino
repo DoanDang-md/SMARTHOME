@@ -4,7 +4,7 @@
  * =============================================================================
  * Flash 16MB / PSRAM 8MB | FreeRTOS dual-core
  * - ESP-NOW hub + Web dashboard + Backend HTTP + Offline cache
- * - AP Setup: SmartHome_Setup / 12345678
+ * - AP Setup: SmartHome_Setup / 12345678 → quét WiFi + nhập Backend URL
  *
  * setup()/loop() chỉ ủy quyền GatewayApp.
  * =============================================================================

@@ -1,6 +1,7 @@
 /**
  * @file BackendClient.h
- * @brief HTTP client: sensors, discover, register, pull sync.
+ * @brief HTTP client: sensors, discover, register, delete, pull sync.
+ * Base URL lấy từ Preferences (backend_url) — cấu hình lúc setup WiFi.
  */
 #pragma once
 
@@ -14,19 +15,61 @@
 #include "EspNowGateway.h"
 #include "EspNowConfig.h"
 
+// Mặc định khi chưa cấu hình trong flash
+#ifndef BACKEND_BASE_URL
+#define BACKEND_BASE_URL "http://192.168.1.218:8000"
+#endif
+
 class BackendClient {
 public:
-    BackendClient()
-        : urlSensors_("http://192.168.1.218:8000/api/sensors"),
-          urlRegister_("http://192.168.1.218:8000/api/devices/register"),
-          urlDiscover_("http://192.168.1.218:8000/api/devices/discover"),
-          urlSync_("http://192.168.1.218:8000/api/gateway/sync") {}
+    BackendClient() { setBaseUrl(String(BACKEND_BASE_URL)); }
 
     void attach(NodeRegistry* reg, StorageManager* storage, EspNowGateway* espnow) {
         registry_ = reg;
         storage_  = storage;
         espnow_   = espnow;
+        reloadFromStorage();
     }
+
+    /** Chuẩn hóa: bỏ / cuối, thêm http:// nếu thiếu. */
+    static String normalizeBaseUrl(String base) {
+        base.trim();
+        while (base.endsWith("/")) {
+            base.remove(base.length() - 1);
+        }
+        if (base.length() == 0) {
+            return String(BACKEND_BASE_URL);
+        }
+        if (!base.startsWith("http://") && !base.startsWith("https://")) {
+            base = "http://" + base;
+        }
+        return base;
+    }
+
+    void setBaseUrl(const String& base) {
+        baseUrl_ = normalizeBaseUrl(base);
+        urlSensors_  = baseUrl_ + "/api/sensors";
+        urlRegister_ = baseUrl_ + "/api/devices/register_from_gateway";
+        urlDiscover_ = baseUrl_ + "/api/devices/discover";
+        urlSync_     = baseUrl_ + "/api/gateway/sync";
+        urlDelete_   = baseUrl_ + "/api/devices/delete_from_gateway";
+        Serial.printf("[BE] Base URL = %s\n", baseUrl_.c_str());
+    }
+
+    void reloadFromStorage() {
+        if (!storage_) {
+            setBaseUrl(String(BACKEND_BASE_URL));
+            return;
+        }
+        String saved = storage_->getString("backend_url", "");
+        if (saved.length() == 0) {
+            setBaseUrl(String(BACKEND_BASE_URL));
+        } else {
+            setBaseUrl(saved);
+        }
+    }
+
+    const String& baseUrl() const { return baseUrl_; }
 
     bool postSensor(const cached_record_t& record) {
         if (WiFi.status() != WL_CONNECTED) return false;
@@ -85,7 +128,7 @@ public:
         http.setTimeout(2500);
         http.begin(urlRegister_);
         http.addHeader("Content-Type", "application/json");
-        StaticJsonDocument<200> doc;
+        StaticJsonDocument<256> doc;
         doc["node_id"]     = nodeId.toInt();
         doc["mac_address"] = macStr;
         doc["type"]        = typeVal;
@@ -94,14 +137,50 @@ public:
         serializeJson(doc, payload);
         int code = http.POST(payload);
         http.end();
-        return (code == 200 || code == 201);
+        if (code != 200 && code != 201) {
+            Serial.printf("[BE REG] HTTP %d node=%s mac=%s\n", code, nodeId.c_str(), macStr.c_str());
+            return false;
+        }
+        Serial.printf("[BE REG] OK node=%s mac=%s\n", nodeId.c_str(), macStr.c_str());
+        return true;
+    }
+
+    bool deleteNode(int nodeId, const char* macStr) {
+        if (WiFi.status() != WL_CONNECTED) {
+            Serial.println("[BE DEL] WiFi offline — bỏ qua sync backend");
+            return false;
+        }
+        HTTPClient http;
+        http.setTimeout(2500);
+        http.begin(urlDelete_);
+        http.addHeader("Content-Type", "application/json");
+        StaticJsonDocument<192> doc;
+        doc["node_id"]   = nodeId;
+        doc["device_id"] = nodeId;
+        if (macStr && macStr[0]) {
+            doc["mac_address"] = macStr;
+        }
+        String payload;
+        serializeJson(doc, payload);
+        int code = http.POST(payload);
+        String resp = http.getString();
+        http.end();
+        if (code == 200 || code == 201) {
+            Serial.printf("[BE DEL] OK id=%d mac=%s resp=%s\n",
+                          nodeId, macStr ? macStr : "-", resp.c_str());
+            return true;
+        }
+        Serial.printf("[BE DEL] HTTP %d id=%d mac=%s resp=%s\n",
+                      code, nodeId, macStr ? macStr : "-", resp.c_str());
+        return false;
     }
 
     void pullConfigFromServer() {
         if (WiFi.status() != WL_CONNECTED || !storage_ || !registry_ || !espnow_) return;
+        reloadFromStorage();
         HTTPClient http;
         http.setTimeout(3000);
-        String url = String(urlSync_) + "?gw_ip=" + WiFi.localIP().toString();
+        String url = urlSync_ + "?gw_ip=" + WiFi.localIP().toString();
         http.begin(url);
         int httpCode = http.GET();
         if (httpCode == 200) {
@@ -145,16 +224,18 @@ public:
                 Serial.printf("[STARTUP SYNC] Đồng bộ %d thiết bị từ Backend!\n", nodes.size());
             }
         } else {
-            Serial.printf("[STARTUP SYNC] Lỗi HTTP %d\n", httpCode);
+            Serial.printf("[STARTUP SYNC] Lỗi HTTP %d url=%s\n", httpCode, url.c_str());
         }
         http.end();
     }
 
 private:
-    const char* urlSensors_;
-    const char* urlRegister_;
-    const char* urlDiscover_;
-    const char* urlSync_;
+    String baseUrl_;
+    String urlSensors_;
+    String urlRegister_;
+    String urlDiscover_;
+    String urlSync_;
+    String urlDelete_;
     NodeRegistry* registry_ = nullptr;
     StorageManager* storage_ = nullptr;
     EspNowGateway* espnow_ = nullptr;

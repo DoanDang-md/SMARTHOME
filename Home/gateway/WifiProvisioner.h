@@ -2,8 +2,8 @@
  * @file WifiProvisioner.h
  * @brief STA connect từ Preferences hoặc AP Setup mode.
  *
- * Quan trọng: tắt WiFi modem sleep — nếu bật PS, ESP32 hay RƠI gói ESP-NOW
- * định kỳ từ node (TX chủ động vẫn OK → điều khiển relay được, sensor mất).
+ * Setup AP dùng WIFI_AP_STA để vẫn quét được WiFi xung quanh.
+ * Tắt WiFi modem sleep — ESP-NOW RX ổn định.
  */
 #pragma once
 
@@ -17,7 +17,6 @@ public:
     explicit WifiProvisioner(StorageManager& storage)
         : storage_(storage), setupMode_(false) {}
 
-    /** Tắt power-save để ESP-NOW RX ổn định. verbose=false khi gọi sau mỗi HTTP. */
     static void disableModemSleep(bool verbose = true) {
         WiFi.setSleep(false);
         esp_wifi_set_ps(WIFI_PS_NONE);
@@ -33,7 +32,6 @@ public:
 
         Serial.printf("\n[WiFi] Đang kết nối: %s\n", ssid.c_str());
         WiFi.mode(WIFI_STA);
-        // Tắt sleep trước khi begin (một số core cần set lại sau khi connected)
         WiFi.setSleep(false);
         WiFi.begin(ssid.c_str(), pass.c_str());
 
@@ -57,10 +55,13 @@ public:
 
     void startApSetup() {
         setupMode_ = true;
-        WiFi.mode(WIFI_AP);
+        // AP + STA: giữ softAP và cho phép scanNetworks()
+        WiFi.mode(WIFI_AP_STA);
         WiFi.softAP("SmartHome_Setup", "12345678");
         Serial.print("\n[AP MODE] IP: ");
         Serial.println(WiFi.softAPIP());
+        Serial.println("[AP MODE] SSID=SmartHome_Setup  pass=12345678");
+        Serial.println("[AP MODE] Mở http://192.168.4.1 — quét WiFi + nhập Backend");
     }
 
     void saveCredentials(const String& ssid, const String& pass) {
@@ -68,9 +69,23 @@ public:
         storage_.putString("wifi_pass", pass);
     }
 
+    void saveBackendUrl(const String& url) {
+        String u = url;
+        u.trim();
+        while (u.endsWith("/")) {
+            u.remove(u.length() - 1);
+        }
+        if (u.length() > 0 && !u.startsWith("http://") && !u.startsWith("https://")) {
+            u = "http://" + u;
+        }
+        storage_.putString("backend_url", u);
+        Serial.printf("[WiFi] Lưu backend_url=%s\n", u.c_str());
+    }
+
     void clearCredentials() {
         storage_.remove("wifi_ssid");
         storage_.remove("wifi_pass");
+        // Giữ backend_url để lần setup sau khỏi gõ lại (xóa hẳn nếu muốn reset full)
     }
 
     bool isSetupMode() const { return setupMode_; }

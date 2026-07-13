@@ -57,6 +57,8 @@ public:
         instance_ = this;
         server_.on("/", HTTP_GET, []() { instance_->handleWifiSetup(); });
         server_.on("/save_wifi", HTTP_POST, []() { instance_->handleSaveWifi(); });
+        server_.on("/api/wifi_scan", HTTP_GET, []() { instance_->handleWifiScan(); });
+        server_.on("/api/setup_info", HTTP_GET, []() { instance_->handleSetupInfo(); });
         server_.begin();
     }
 
@@ -87,16 +89,150 @@ private:
         sendHtml(200, wifi_setup_html);
     }
 
-    void handleSaveWifi() {
-        if (server_.hasArg("ssid") && wifi_ && storage_) {
-            wifi_->saveCredentials(server_.arg("ssid"), server_.arg("password"));
-            sendHtml(200,
-                "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\">"
-                "<title>Da luu</title></head><body style=\"font-family:sans-serif;padding:24px\">"
-                "<h2>Đã lưu WiFi! Gateway sẽ khởi động lại...</h2></body></html>");
-            delay(2000);
-            ESP.restart();
+    /** Trả backend_url đã lưu (prefill form setup). */
+    void handleSetupInfo() {
+        String be = BACKEND_BASE_URL;
+        if (storage_) {
+            String saved = storage_->getString("backend_url", "");
+            if (saved.length() > 0) be = saved;
         }
+        be.replace("\\", "\\\\");
+        be.replace("\"", "\\\"");
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.send(200, kJsonUtf8, "{\"backend_url\":\"" + be + "\"}");
+    }
+
+    /**
+     * Quét WiFi (cần WIFI_AP_STA). JSON:
+     * [{ssid,rssi,secure}, ...] — gộp SSID trùng (giữ RSSI mạnh nhất).
+     */
+    void handleWifiScan() {
+        Serial.println("[WiFi] Scanning networks...");
+        // async=false, show_hidden=true
+        int n = WiFi.scanNetworks(false, true);
+        if (n < 0) {
+            Serial.printf("[WiFi] scan failed code=%d\n", n);
+            server_.send(200, kJsonUtf8, "[]");
+            return;
+        }
+
+        // Gộp SSID trùng — giữ RSSI tốt nhất
+        static const int kMax = 40;
+        String ssids[kMax];
+        int rssis[kMax];
+        bool secs[kMax];
+        int count = 0;
+
+        for (int i = 0; i < n && count < kMax; ++i) {
+            String ssid = WiFi.SSID(i);
+            if (ssid.length() == 0) continue;
+            int rssi = WiFi.RSSI(i);
+            bool secure = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+            int found = -1;
+            for (int j = 0; j < count; ++j) {
+                if (ssids[j] == ssid) {
+                    found = j;
+                    break;
+                }
+            }
+            if (found >= 0) {
+                if (rssi > rssis[found]) {
+                    rssis[found] = rssi;
+                    secs[found] = secure;
+                }
+            } else {
+                ssids[count] = ssid;
+                rssis[count] = rssi;
+                secs[count] = secure;
+                count++;
+            }
+        }
+        WiFi.scanDelete();
+
+        // Sắp xếp RSSI giảm dần (bubble, n nhỏ)
+        for (int i = 0; i < count; ++i) {
+            for (int j = i + 1; j < count; ++j) {
+                if (rssis[j] > rssis[i]) {
+                    int tr = rssis[i]; rssis[i] = rssis[j]; rssis[j] = tr;
+                    bool ts = secs[i]; secs[i] = secs[j]; secs[j] = ts;
+                    String tn = ssids[i]; ssids[i] = ssids[j]; ssids[j] = tn;
+                }
+            }
+        }
+
+        String json = "[";
+        for (int i = 0; i < count; ++i) {
+            if (i) json += ",";
+            String s = ssids[i];
+            s.replace("\\", "\\\\");
+            s.replace("\"", "\\\"");
+            json += "{\"ssid\":\"";
+            json += s;
+            json += "\",\"rssi\":";
+            json += String(rssis[i]);
+            json += ",\"secure\":";
+            json += secs[i] ? "true" : "false";
+            json += "}";
+        }
+        json += "]";
+        Serial.printf("[WiFi] Scan done: %d unique SSIDs\n", count);
+        server_.sendHeader("Cache-Control", "no-store");
+        server_.send(200, kJsonUtf8, json);
+    }
+
+    void handleSaveWifi() {
+        if (!server_.hasArg("ssid") || !wifi_ || !storage_) {
+            sendHtml(400,
+                "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"></head>"
+                "<body style=\"font-family:sans-serif;padding:24px;background:#0f172a;color:#e2e8f0\">"
+                "<h2>Thiếu SSID WiFi.</h2><a href=\"/\" style=\"color:#22d3ee\">Quay lại</a></body></html>");
+            return;
+        }
+        String ssid = server_.arg("ssid");
+        ssid.trim();
+        String pass = server_.hasArg("password") ? server_.arg("password") : "";
+        String backend = server_.hasArg("backend_url") ? server_.arg("backend_url") : "";
+        backend.trim();
+
+        if (ssid.length() == 0) {
+            sendHtml(400,
+                "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"></head>"
+                "<body style=\"font-family:sans-serif;padding:24px;background:#0f172a;color:#e2e8f0\">"
+                "<h2>SSID không được trống.</h2><a href=\"/\" style=\"color:#22d3ee\">Quay lại</a></body></html>");
+            return;
+        }
+        if (backend.length() == 0) {
+            sendHtml(400,
+                "<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\"></head>"
+                "<body style=\"font-family:sans-serif;padding:24px;background:#0f172a;color:#e2e8f0\">"
+                "<h2>Cần địa chỉ Backend (vd http://192.168.1.50:8000).</h2>"
+                "<a href=\"/\" style=\"color:#22d3ee\">Quay lại</a></body></html>");
+            return;
+        }
+
+        wifi_->saveCredentials(ssid, pass);
+        wifi_->saveBackendUrl(backend);
+        if (backend_) {
+            backend_->setBaseUrl(backend);
+        }
+
+        Serial.printf("[SETUP] WiFi SSID=%s | Backend=%s\n", ssid.c_str(), backend.c_str());
+
+        String okHtml =
+            String("<!DOCTYPE html><html lang=\"vi\"><head><meta charset=\"UTF-8\">"
+                   "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                   "<title>Đã lưu</title>"
+                   "<style>body{font-family:sans-serif;padding:28px;background:#0f172a;color:#e2e8f0}"
+                   "h2{color:#22c55e}.m{color:#94a3b8;line-height:1.5}</style></head><body>"
+                   "<h2>Đã lưu cấu hình!</h2>"
+                   "<p class=\"m\">WiFi: <b>")
+            + ssid + "</b><br>Backend: <b>" + BackendClient::normalizeBaseUrl(backend)
+            + "</b></p>"
+            + "<p class=\"m\">Gateway đang khởi động lại và kết nối mạng nhà bạn…</p>"
+            + "</body></html>";
+        sendHtml(200, okHtml);
+        delay(1500);
+        ESP.restart();
     }
 
     void handleResetWifi() {
@@ -354,19 +490,32 @@ private:
 
     void handleDeleteNode() {
         String id = server_.arg("id");
-        int idx = id.toInt() - 1;
+        int nodeId = id.toInt();
+        int idx = nodeId - 1;
         String macKey = "mac_" + id;
+        char macStr[18] = {0};
+        bool hadMac = false;
+
         if (storage_->isKey(macKey.c_str())) {
             uint8_t mac[6];
             storage_->getBytes(macKey.c_str(), mac, 6);
+            snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            hadMac = true;
             if (espnow_) {
                 espnow_->removePeer(mac);
                 Serial.printf("[DELETE] Peer %02X:%02X:%02X:%02X:%02X:%02X\n",
                               mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
             }
         }
+
+        // Đồng bộ xóa trên Backend (ưu tiên MAC) — trước khi gỡ local
+        if (backend_ && nodeId > 0) {
+            backend_->deleteNode(nodeId, hadMac ? macStr : nullptr);
+        }
+
         if (registry_ && idx >= 0 && idx < GW_MAX_NODES) {
-            registry_->clearSlot(id.toInt());
+            registry_->clearSlot(nodeId);
         }
         storage_->remove(macKey.c_str());
         storage_->remove(("name_" + id).c_str());

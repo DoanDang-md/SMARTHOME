@@ -15,29 +15,209 @@ const char wifi_setup_html[] PROGMEM = R"rawliteral(
   <meta charset="UTF-8">
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cài đặt WiFi - SmartHome Gateway</title>
+  <title>Cài đặt Gateway - SmartHome</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap');
-    body { font-family:'Be Vietnam Pro','Segoe UI',system-ui,sans-serif; background-color:#f0f2f5; padding:20px; }
-    .card { max-width:400px; margin:auto; background:white; padding:30px; border-radius:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
-    h2 { color:#1a73e8; text-align:center; }
-    p { text-align:center; color:#555; font-size:14px; }
-    input[type="text"], input[type="password"] { width:100%; padding:12px; margin:10px 0 20px 0; border:1px solid #ddd; border-radius:5px; box-sizing:border-box; font-family:inherit; }
-    input[type="submit"] { background-color:#1a73e8; color:white; border:none; padding:14px; width:100%; border-radius:5px; font-size:16px; cursor:pointer; font-family:inherit; font-weight:600; }
+    :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --muted:#94a3b8;
+            --accent:#6366f1; --accent2:#22d3ee; --green:#22c55e; --red:#ef4444; }
+    * { box-sizing:border-box; }
+    body {
+      font-family:'Be Vietnam Pro','Segoe UI',system-ui,sans-serif;
+      background:linear-gradient(160deg,#0f172a 0%,#1e1b4b 100%);
+      min-height:100vh; margin:0; padding:20px; color:var(--text);
+    }
+    .card {
+      max-width:440px; margin:24px auto; background:var(--card);
+      padding:28px 24px; border-radius:16px; border:1px solid var(--line);
+      box-shadow:0 16px 40px rgba(0,0,0,.35);
+    }
+    h2 { margin:0 0 6px; font-size:1.35rem; text-align:center;
+         background:linear-gradient(135deg,var(--accent),var(--accent2));
+         -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .sub { text-align:center; color:var(--muted); font-size:.85rem; margin:0 0 22px; line-height:1.45; }
+    label { display:block; font-size:.8rem; font-weight:600; color:var(--muted); margin:12px 0 6px; }
+    input[type="text"], input[type="password"] {
+      width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px;
+      background:#0f172a; color:var(--text); font-family:inherit; font-size:.95rem; outline:none;
+    }
+    input:focus { border-color:var(--accent); }
+    .row-scan { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+    .btn {
+      border:none; border-radius:10px; padding:12px 14px; font-family:inherit;
+      font-weight:600; font-size:.9rem; cursor:pointer;
+    }
+    .btn-scan { background:rgba(99,102,241,.2); color:#c7d2fe; border:1px solid rgba(99,102,241,.4); flex:1; }
+    .btn-scan:disabled { opacity:.5; cursor:wait; }
+    .btn-submit {
+      width:100%; margin-top:18px; background:linear-gradient(135deg,var(--accent),#4f46e5);
+      color:#fff; font-size:1rem; padding:14px;
+    }
+    .btn-submit:disabled { opacity:.5; }
+    .wifi-list {
+      max-height:220px; overflow-y:auto; border:1px solid var(--line); border-radius:12px;
+      background:#0f172a; margin:8px 0 4px;
+    }
+    .wifi-item {
+      display:flex; align-items:center; gap:10px; padding:11px 12px;
+      border-bottom:1px solid var(--line); cursor:pointer; transition:background .15s;
+    }
+    .wifi-item:last-child { border-bottom:none; }
+    .wifi-item:hover, .wifi-item.selected { background:rgba(99,102,241,.18); }
+    .wifi-item .name { flex:1; font-weight:500; font-size:.9rem; word-break:break-all; }
+    .wifi-item .meta { font-size:.72rem; color:var(--muted); white-space:nowrap; }
+    .bars { letter-spacing:-1px; color:var(--accent2); font-size:.85rem; min-width:28px; }
+    .hint { font-size:.75rem; color:var(--muted); margin-top:4px; line-height:1.4; }
+    .status { font-size:.8rem; color:var(--accent2); min-height:1.2em; margin:6px 0; }
+    .status.err { color:var(--red); }
+    .manual-toggle { font-size:.8rem; color:var(--accent2); cursor:pointer; margin-top:8px; text-decoration:underline; }
+    .manual-box { display:none; margin-top:8px; }
+    .manual-box.show { display:block; }
+    .selected-ssid {
+      margin-top:8px; padding:10px 12px; border-radius:10px;
+      background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.3);
+      font-size:.85rem; color:#86efac; display:none;
+    }
+    .selected-ssid.show { display:block; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>Cài đặt mạng LAN</h2>
-    <p>Nhập thông tin WiFi nhà bạn để Gateway kết nối.</p>
-    <form action="/save_wifi" method="POST" accept-charset="UTF-8">
-      <label>Tên WiFi (SSID):</label>
-      <input type="text" name="ssid" required placeholder="Ví dụ: WiFi_Nha_Toi">
-      <label>Mật khẩu:</label>
-      <input type="password" name="password" placeholder="Để trống nếu không có mật khẩu">
-      <input type="submit" value="Lưu và khởi động lại">
+    <h2>Cài đặt Gateway</h2>
+    <p class="sub">Chọn WiFi nhà bạn, nhập mật khẩu và địa chỉ máy chạy Backend (FastAPI).</p>
+
+    <form id="setup-form" action="/save_wifi" method="POST" accept-charset="UTF-8">
+      <label>1. Mạng WiFi</label>
+      <div class="row-scan">
+        <button type="button" class="btn btn-scan" id="btn-scan" onclick="scanWifi()">Quét WiFi xung quanh</button>
+      </div>
+      <div class="status" id="scan-status">Bấm «Quét WiFi» để tải danh sách mạng.</div>
+      <div class="wifi-list" id="wifi-list"></div>
+      <div class="selected-ssid" id="selected-box">Đã chọn: <b id="selected-label"></b></div>
+
+      <div class="manual-toggle" onclick="toggleManual()">Không thấy mạng? Nhập SSID thủ công</div>
+      <div class="manual-box" id="manual-box">
+        <input type="text" id="ssid-manual" placeholder="Tên WiFi (SSID)" autocomplete="off">
+      </div>
+      <input type="hidden" name="ssid" id="ssid" required>
+
+      <label>2. Mật khẩu WiFi</label>
+      <input type="password" name="password" id="password" placeholder="Để trống nếu WiFi mở" autocomplete="off">
+
+      <label>3. Địa chỉ Backend (máy chạy FastAPI)</label>
+      <input type="text" name="backend_url" id="backend_url"
+             placeholder="http://192.168.1.100:8000" required autocomplete="off">
+      <p class="hint">IP máy tính / PC trong cùng WiFi + cổng 8000. Ví dụ: <b>http://192.168.1.50:8000</b></p>
+
+      <button type="submit" class="btn btn-submit" id="btn-save">Lưu và khởi động lại</button>
     </form>
   </div>
+  <script>
+    var selectedSsid = '';
+
+    function bars(rssi) {
+      if (rssi >= -55) return '||||';
+      if (rssi >= -65) return '|||';
+      if (rssi >= -75) return '||';
+      return '|';
+    }
+
+    function toggleManual() {
+      var box = document.getElementById('manual-box');
+      box.classList.toggle('show');
+    }
+
+    function selectSsid(ssid) {
+      selectedSsid = ssid || '';
+      document.getElementById('ssid').value = selectedSsid;
+      document.getElementById('ssid-manual').value = selectedSsid;
+      var box = document.getElementById('selected-box');
+      document.getElementById('selected-label').textContent = selectedSsid;
+      if (selectedSsid) box.classList.add('show'); else box.classList.remove('show');
+      var items = document.querySelectorAll('.wifi-item');
+      for (var i = 0; i < items.length; i++) {
+        items[i].classList.toggle('selected', items[i].getAttribute('data-ssid') === selectedSsid);
+      }
+    }
+
+    document.getElementById('ssid-manual').addEventListener('input', function(e) {
+      selectSsid(e.target.value.trim());
+    });
+
+    function scanWifi() {
+      var btn = document.getElementById('btn-scan');
+      var st = document.getElementById('scan-status');
+      var list = document.getElementById('wifi-list');
+      btn.disabled = true;
+      st.className = 'status';
+      st.textContent = 'Đang quét mạng WiFi (vài giây)...';
+      list.innerHTML = '';
+      fetch('/api/wifi_scan')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          if (!data || !data.length) {
+            st.className = 'status err';
+            st.textContent = 'Không tìm thấy mạng. Thử lại hoặc nhập SSID thủ công.';
+            return;
+          }
+          st.textContent = 'Tìm thấy ' + data.length + ' mạng — chạm để chọn.';
+          data.forEach(function(net) {
+            var el = document.createElement('div');
+            el.className = 'wifi-item';
+            el.setAttribute('data-ssid', net.ssid);
+            el.innerHTML =
+              '<span class="bars">' + bars(net.rssi) + '</span>' +
+              '<span class="name"></span>' +
+              '<span class="meta">' + (net.secure ? '🔒 ' : '🔓 ') + net.rssi + ' dBm</span>';
+            el.querySelector('.name').textContent = net.ssid || '(ẩn)';
+            el.onclick = function() { selectSsid(net.ssid); };
+            list.appendChild(el);
+          });
+        })
+        .catch(function() {
+          btn.disabled = false;
+          st.className = 'status err';
+          st.textContent = 'Lỗi quét WiFi. Thử lại.';
+        });
+    }
+
+    document.getElementById('setup-form').addEventListener('submit', function(e) {
+      var ssid = document.getElementById('ssid').value.trim();
+      if (!ssid) {
+        var man = document.getElementById('ssid-manual').value.trim();
+        if (man) {
+          document.getElementById('ssid').value = man;
+          ssid = man;
+        }
+      }
+      if (!ssid) {
+        e.preventDefault();
+        alert('Hãy chọn WiFi từ danh sách hoặc nhập SSID thủ công.');
+        return;
+      }
+      var be = document.getElementById('backend_url').value.trim();
+      if (!be) {
+        e.preventDefault();
+        alert('Nhập địa chỉ Backend (vd http://192.168.1.50:8000).');
+        return;
+      }
+      document.getElementById('btn-save').disabled = true;
+      document.getElementById('btn-save').textContent = 'Đang lưu...';
+    });
+
+    // Prefill backend đã lưu (nếu có)
+    fetch('/api/setup_info')
+      .then(function(r) { return r.json(); })
+      .then(function(info) {
+        if (info && info.backend_url) {
+          document.getElementById('backend_url').value = info.backend_url;
+        }
+      })
+      .catch(function() {});
+
+    // Tự quét lần đầu
+    setTimeout(scanWifi, 400);
+  </script>
 </body>
 </html>
 )rawliteral";

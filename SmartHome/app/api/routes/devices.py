@@ -1,10 +1,20 @@
+from typing import Optional
+
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.api.dependencies import get_db, get_current_user
 from app.services.device_service import DeviceService
 import schemas, models
 
 router = APIRouter(tags=["Devices"])
+
+
+class GatewayDeleteRequest(BaseModel):
+    node_id: Optional[int] = None
+    device_id: Optional[int] = None
+    mac_address: Optional[str] = None
+
 
 @router.get("/api/devices")
 def get_all_devices(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -27,6 +37,20 @@ def register_device(device: schemas.DeviceCreate, db: Session = Depends(get_db),
 def register_from_gateway(device: schemas.GatewayDeviceRegister, db: Session = Depends(get_db)):
     """Gateway /save gọi — không JWT. Body: name, mac_address, type|device_type, node_id?"""
     return DeviceService(db).register_from_gateway(device)
+
+
+@router.post("/api/devices/delete_from_gateway")
+def delete_from_gateway(data: GatewayDeleteRequest, db: Session = Depends(get_db)):
+    """
+    Gateway xóa thiết bị trên UI local → đồng bộ xóa backend.
+    Ưu tiên mac_address; fallback node_id/device_id.
+    """
+    nid = data.device_id if data.device_id is not None else data.node_id
+    return DeviceService(db).delete_from_gateway(
+        device_id=nid,
+        mac_address=data.mac_address,
+    )
+
 
 @router.put("/api/devices/{device_id}/status")
 def update_device_status(device_id: int, status: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
