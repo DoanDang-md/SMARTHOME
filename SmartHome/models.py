@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime,Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean, Text
 from sqlalchemy.sql import func
 from database import Base
 
@@ -62,3 +62,32 @@ class Event(Base):
     action = Column(String(50), nullable=False)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     status = Column(String(20), nullable=True)
+
+
+# --- Dual-Memory (Telegram AI) ---
+
+class ChatHistory(Base):
+    """RAW tin nhắn AI ↔ user (theo user hệ thống)."""
+    __tablename__ = "ai_chat_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # user | ai | model
+    content = Column(Text, nullable=False)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ShortTermSession(Base):
+    """Tóm tắt ngắn hạn (rolling summary) theo user."""
+    __tablename__ = "ai_short_term_sessions"
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    current_summary = Column(Text, nullable=True, default="")
+    last_updated_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class LongTermMemory(Base):
+    """Sự kiện cốt lõi (facts) lưu lâu dài theo user."""
+    __tablename__ = "ai_long_term_memories"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    fact_content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

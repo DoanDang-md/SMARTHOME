@@ -1,17 +1,20 @@
 import os
+
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+
 from app.api.dependencies import get_db
 from app.services.telegram_service import TelegramBotService
 
 router = APIRouter(tags=["Telegram"])
 load_dotenv()
-# Token: env TELEGRAM_BOT_TOKEN, hoặc fallback token dev hiện có
-TELEGRAM_BOT_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN"
-    
-)
+
+# Token chỉ lấy từ .env / môi trường (không hardcode)
+TELEGRAM_BOT_TOKEN = (os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+if not TELEGRAM_BOT_TOKEN:
+    print("[Telegram] Cảnh báo: TELEGRAM_BOT_TOKEN trống — long-poll/webhook sẽ không chạy.")
+
 
 
 @router.post("/api/telegram/webhook")

@@ -289,10 +289,22 @@ class DeviceService:
             )
 
         if device:
-            if data.temperature is not None and data.temperature != 0:
-                device.last_temp = data.temperature
-            if data.humidity is not None and data.humidity != 0:
-                device.last_humid = data.humidity
+            # Cập nhật T/H khi có số liệu hợp lệ.
+            # Trước đây bỏ qua mọi giá trị == 0 → hybrid có thể không lên Telegram.
+            # Gói rỗng thường là (0, 0) cùng lúc → bỏ qua cặp đó.
+            temp = data.temperature
+            humid = data.humidity
+            both_zero = (
+                temp is not None
+                and humid is not None
+                and float(temp) == 0.0
+                and float(humid) == 0.0
+            )
+            if not both_zero:
+                if temp is not None and -40.0 <= float(temp) <= 125.0:
+                    device.last_temp = float(temp)
+                if humid is not None and 0.0 <= float(humid) <= 100.0:
+                    device.last_humid = float(humid)
 
             if data.status is not None:
                 old = device.status
@@ -322,22 +334,27 @@ class DeviceService:
         return {"status": "success", "gw_ip_recorded": gateway.active_ip}
 
     def gateway_sync(self, gw_ip: str):
+        """Gateway startup pull — kèm ir_commands để khôi phục lệnh đã học."""
         if gw_ip:
             gateway.update_ip(gw_ip)
+        from app.services.ir_service import IRService
+
+        ir_svc = IRService(self.db)
         devices = self.db.query(models.Device).all()
-        return {
-            "status": "ok",
-            "nodes": [
-                {
-                    "node_id": d.id,
-                    "mac_address": _norm_mac(d.mac_address),
-                    "name": d.name,
-                    "type": d.device_type,
-                    "status": d.status,
-                }
-                for d in devices
-            ],
-        }
+        nodes = []
+        for d in devices:
+            entry = {
+                "node_id": d.id,
+                "mac_address": _norm_mac(d.mac_address),
+                "name": d.name,
+                "type": d.device_type,
+                "status": d.status,
+            }
+            # Chỉ gửi lệnh IR cho node type IR (2); hybrid/relay bỏ qua
+            if int(d.device_type or 0) == 2:
+                entry["ir_commands"] = ir_svc.list_commands_payload(d.id)
+            nodes.append(entry)
+        return {"status": "ok", "nodes": nodes}
 
     def get_devices_with_usage(self):
         # 1. Lấy danh sách thiết bị được phép xem

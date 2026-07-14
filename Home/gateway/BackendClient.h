@@ -179,16 +179,18 @@ public:
         if (WiFi.status() != WL_CONNECTED || !storage_ || !registry_ || !espnow_) return;
         reloadFromStorage();
         HTTPClient http;
-        http.setTimeout(3000);
+        http.setTimeout(5000);
         String url = urlSync_ + "?gw_ip=" + WiFi.localIP().toString();
         http.begin(url);
         int httpCode = http.GET();
         if (httpCode == 200) {
             String payload = http.getString();
-            StaticJsonDocument<2048> doc;
+            // Tăng buffer: nodes + ir_commands (n,c) từ Backend
+            DynamicJsonDocument doc(8192);
             if (deserializeJson(doc, payload) == DeserializationError::Ok) {
                 JsonArray nodes = doc["nodes"].as<JsonArray>();
                 bool active_ids[GW_MAX_NODES + 1] = {false};
+                int irRestored = 0;
                 for (JsonObject node : nodes) {
                     int nid = node["node_id"];
                     const char* macStr  = node["mac_address"];
@@ -204,6 +206,17 @@ public:
                             storage_->putUInt(("type_" + nidStr).c_str(), typeVal);
                             espnow_->addPeer(mac_bytes);
                             registry_->registerSlot(nid, mac_bytes, static_cast<uint8_t>(typeVal), true);
+
+                            // Khôi phục lệnh IR đã học từ Backend → Preferences ircmds_*
+                            // Form BE: [{"n":"Power","c":123}, ...] — trùng form Gateway UI
+                            if (node["ir_commands"].is<JsonArray>()) {
+                                String irJson;
+                                serializeJson(node["ir_commands"], irJson);
+                                storage_->putString(("ircmds_" + nidStr).c_str(), irJson);
+                                irRestored += node["ir_commands"].as<JsonArray>().size();
+                                Serial.printf("[STARTUP SYNC] IR node %d: %d lệnh\n",
+                                              nid, (int)node["ir_commands"].as<JsonArray>().size());
+                            }
                         }
                     }
                 }
@@ -221,7 +234,10 @@ public:
                     storage_->remove(("type_" + nidStr).c_str());
                     registry_->clearSlot(i);
                 }
-                Serial.printf("[STARTUP SYNC] Đồng bộ %d thiết bị từ Backend!\n", nodes.size());
+                Serial.printf("[STARTUP SYNC] Đồng bộ %d thiết bị, %d lệnh IR từ Backend!\n",
+                              nodes.size(), irRestored);
+            } else {
+                Serial.println("[STARTUP SYNC] JSON parse lỗi (buffer/format)");
             }
         } else {
             Serial.printf("[STARTUP SYNC] Lỗi HTTP %d url=%s\n", httpCode, url.c_str());
