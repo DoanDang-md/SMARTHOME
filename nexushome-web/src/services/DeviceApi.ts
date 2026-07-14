@@ -20,7 +20,7 @@ class DeviceApi {
     const response = await fetch(`${this.baseUrl}/api/devices`, {
       headers: this.getHeaders(),
     });
-    if (!response.ok) throw new Error("Failed to fetch devices");
+    if (!response.ok) throw new Error("Không tải được danh sách thiết bị");
     const data = await response.json();
     return data.devices;
   }

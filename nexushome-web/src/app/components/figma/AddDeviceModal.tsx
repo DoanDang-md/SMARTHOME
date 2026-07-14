@@ -126,7 +126,7 @@ export default function AddDeviceModal({
               className="font-semibold text-lg"
               style={{ color: "#ddeeff", fontFamily: "'Exo 2', sans-serif" }}
             >
-              {isAutoDiscovery ? "Approve Device" : "Add New Device"}
+              {isAutoDiscovery ? "Duyệt thiết bị" : "Thêm thiết bị mới"}
             </h2>
           </div>
           <button
@@ -156,12 +156,12 @@ export default function AddDeviceModal({
               className="block text-xs font-semibold uppercase tracking-widest"
               style={{ color: "#5a7a9a", fontFamily: "'DM Mono', monospace" }}
             >
-              Device Name
+              Tên thiết bị
             </label>
             <input
               ref={nameRef}
               type="text"
-              placeholder="e.g. Bedroom Ceiling Light"
+              placeholder="VD: Đèn phòng ngủ"
               className="w-full rounded-xl px-4 py-3 text-sm outline-none transition-all duration-200"
               style={{
                 background: "rgba(0,229,255,0.04)",
@@ -190,7 +190,7 @@ export default function AddDeviceModal({
               className="block text-xs font-semibold uppercase tracking-widest"
               style={{ color: "#5a7a9a", fontFamily: "'DM Mono', monospace" }}
             >
-              MAC Address
+              Địa chỉ MAC
             </label>
             <input
               ref={macRef}
@@ -227,7 +227,7 @@ export default function AddDeviceModal({
               className="block text-xs font-semibold uppercase tracking-widest"
               style={{ color: "#5a7a9a", fontFamily: "'DM Mono', monospace" }}
             >
-              Device Type
+              Loại thiết bị
             </label>
             <div className="relative">
               <select
@@ -255,16 +255,16 @@ export default function AddDeviceModal({
               >
                 {/* Đã set sẵn số nguyên trùng khớp với Backend */}
                 <option value="1" style={{ background: "#0c1528" }}>
-                  Relay
+                  Relay (bật/tắt)
                 </option>
                 <option value="2" style={{ background: "#0c1528" }}>
-                  IR Blaster
+                  Hồng ngoại (IR)
                 </option>
                 <option value="3" style={{ background: "#0c1528" }}>
-                  Sensor
+                  Cảm biến
                 </option>
                 <option value="4" style={{ background: "#0c1528" }}>
-                  Hybrid
+                  Hybrid (relay + cảm biến)
                 </option>
               </select>
               <ChevronRight
@@ -298,7 +298,7 @@ export default function AddDeviceModal({
                   "rgba(255,255,255,0.08)";
               }}
             >
-              Cancel
+              Hủy
             </button>
 
             <button
@@ -330,10 +330,11 @@ export default function AddDeviceModal({
               }}
             >
               {isLoading ? (
-                "Processing..."
+                "Đang xử lý..."
               ) : (
                 <>
-                  <Plus size={16} /> Register Device
+                  <Plus size={16} />{" "}
+                  {isAutoDiscovery ? "Duyệt thiết bị" : "Thêm thiết bị"}
                 </>
               )}
             </button>

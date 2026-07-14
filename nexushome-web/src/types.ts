@@ -1,6 +1,6 @@
 // File: src/types.ts
 
-export type DeviceType = "Relay" | "IR Blaster" | "Sensor" | "Hybrid";
+export type DeviceType = "Relay" | "Hồng ngoại" | "Cảm biến" | "Hybrid";
 
 export interface Device {
   id: number;

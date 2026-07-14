@@ -32,8 +32,8 @@ export default function DeviceCard({
   const meta = getDeviceMeta(device.device_type);
   const IconComponent = meta.icon;
 
-  const deviceName = device.name || "Unnamed Device";
-  const deviceRoom = device.room || "Smart Home Network";
+  const deviceName = device.name || "Chưa đặt tên";
+  const deviceRoom = device.room || "Mạng nhà thông minh";
   const deviceMac = device.mac_address || "XX:XX:XX:XX:XX:XX";
   const isOn = device.status === 1;
 
@@ -145,7 +145,7 @@ export default function DeviceCard({
               </div>
               <div>
                 <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
-                  Temp
+                  Nhiệt độ
                 </span>
                 <span className="text-sm font-bold text-orange-300 font-mono">
                   {device.last_temp !== undefined
@@ -160,7 +160,7 @@ export default function DeviceCard({
               </div>
               <div>
                 <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400 block">
-                  Humidity
+                  Độ ẩm
                 </span>
                 <span className="text-sm font-bold text-cyan-300 font-mono">
                   {device.last_humid !== undefined
@@ -347,7 +347,7 @@ export default function DeviceCard({
               className="text-[11px] font-semibold tracking-wide"
               style={{ color: isOn ? "#10b981" : "#64748b" }}
             >
-              {isOn ? "ONLINE" : "OFFLINE"}
+              {isOn ? "BẬT" : "TẮT"}
             </span>
           </div>
           {onDelete && (

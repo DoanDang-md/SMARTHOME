@@ -36,17 +36,17 @@ export default function HistoryPage() {
     >
       <header className="mb-8 flex items-center gap-3">
         <Activity size={24} className="text-cyan-400" />
-        <h1 className="text-2xl font-bold text-[#ddeeff]">Activity History</h1>
+        <h1 className="text-2xl font-bold text-[#ddeeff]">Lịch sử hoạt động</h1>
       </header>
 
       <div className="w-full rounded-2xl overflow-hidden border border-white/5 bg-[#0a1120]/80 backdrop-blur-xl shadow-2xl">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-white/5 text-xs uppercase tracking-wider text-[#4a6a8a] border-b border-white/5 font-mono">
-              <th className="p-4 pl-6 font-semibold">User</th>
-              <th className="p-4 font-semibold">Action</th>
-              <th className="p-4 font-semibold">Device</th>
-              <th className="p-4 pr-6 font-semibold text-right">Time</th>
+              <th className="p-4 pl-6 font-semibold">Người dùng</th>
+              <th className="p-4 font-semibold">Hành động</th>
+              <th className="p-4 font-semibold">Thiết bị</th>
+              <th className="p-4 pr-6 font-semibold text-right">Thời gian</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -71,7 +71,13 @@ export default function HistoryPage() {
                           : "bg-purple-500/10 text-purple-400 border border-purple-500/20"
                     }`}
                   >
-                    {log.action}
+                    {log.action === "TURN_ON"
+                      ? "BẬT"
+                      : log.action === "TURN_OFF"
+                        ? "TẮT"
+                        : log.action.startsWith("IR_LEARNED")
+                          ? "Học IR"
+                          : log.action}
                   </span>
                 </td>
                 <td className="p-4 text-sm text-[#a0aec0] flex items-center gap-2">

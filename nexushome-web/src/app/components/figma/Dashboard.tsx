@@ -103,7 +103,7 @@ export default function Dashboard() {
   const deleteDevice = async (device: Device) => {
     if (
       !confirm(
-        `Bạn có chắc muốn xóa thiết bị "${device.name || "Unnamed"}" (ID: #${device.id}) khỏi hệ thống không?`,
+        `Bạn có chắc muốn xóa thiết bị "${device.name || "Chưa đặt tên"}" (ID: #${device.id}) khỏi hệ thống không?`,
       )
     )
       return;
@@ -132,6 +132,21 @@ export default function Dashboard() {
     (d) => d.device_type === 3 || d.status === 1,
   ).length;
   const offlineCount = devices.length - onlineCount;
+  // usage_time dạng "45M" / "8.5H" — lấy giá trị “dày” nhất để preview
+  const topUsage = (() => {
+    let best: { name: string; t: string; score: number } | null = null;
+    for (const d of devices) {
+      const t = (d.usage_time || "").trim();
+      if (!t || t === "0M") continue;
+      let score = 0;
+      if (t.endsWith("H")) score = parseFloat(t) * 3600;
+      else if (t.endsWith("M")) score = parseFloat(t) * 60;
+      else score = 1;
+      if (!best || score > best.score)
+        best = { name: d.name, t, score };
+    }
+    return best;
+  })();
 
   return (
     <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -149,19 +164,19 @@ export default function Dashboard() {
             className="font-bold text-xl leading-none"
             style={{ color: "#ddeeff" }}
           >
-            Dashboard
+            Tổng quan nhà
           </h1>
           <p
             className="text-xs mt-1"
             style={{ color: "#3a5a7a", fontFamily: "'DM Mono', monospace" }}
           >
-            {new Date().toLocaleDateString("en-GB", {
+            {new Date().toLocaleDateString("vi-VN", {
               weekday: "long",
               day: "numeric",
               month: "long",
               year: "numeric",
             })}{" "}
-            — {onlineCount} of {devices.length} devices online
+            — {onlineCount}/{devices.length} thiết bị đang hoạt động
           </p>
         </div>
 
@@ -173,6 +188,7 @@ export default function Dashboard() {
               border: "1px solid rgba(255,255,255,0.07)",
               color: "#4a6a8a",
             }}
+            title="Thông báo"
           >
             <Bell size={16} />
             <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_6px_#ff4466]" />
@@ -188,14 +204,14 @@ export default function Dashboard() {
             }}
           >
             <Plus size={16} />
-            <span>Add Device</span>
+            <span>Thêm thiết bị</span>
           </button>
 
           <button
             onClick={() => setShowScanner(true)}
             className="px-4 py-2 bg-purple-500/10 text-purple-400 border border-purple-500/30 rounded-lg font-semibold flex items-center gap-2 hover:bg-purple-500/20"
           >
-            <Search size={16} /> Scan
+            <Search size={16} /> Quét
           </button>
         </div>
       </header>
@@ -207,22 +223,32 @@ export default function Dashboard() {
       >
         <div className="grid grid-cols-2 gap-4 mb-8 lg:grid-cols-4">
           <StatCard
-            label="Total Devices"
+            label="Tổng thiết bị"
             value={devices.length}
-            sub="registered units"
+            sub="đã đăng ký"
             color="#00e5ff"
           />
           <StatCard
-            label="Online Now"
+            label="Đang hoạt động"
             value={onlineCount}
-            sub="active connections"
+            sub="bật / có tín hiệu"
             color="#39ff14"
           />
           <StatCard
-            label="Offline"
+            label="Tắt / chờ"
             value={offlineCount}
-            sub="awaiting signal"
+            sub="chưa bật"
             color="#ff6b35"
+          />
+          <StatCard
+            label="Dùng nhiều nhất"
+            value={topUsage?.t ?? "—"}
+            sub={
+              topUsage
+                ? topUsage.name
+                : "Chi tiết ở menu Báo cáo"
+            }
+            color="#fbbf24"
           />
         </div>
 
@@ -232,7 +258,7 @@ export default function Dashboard() {
               className="font-semibold text-base"
               style={{ color: "#ddeeff" }}
             >
-              All Devices
+              Tất cả thiết bị
             </h2>
             <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 font-mono">
               {devices.length}

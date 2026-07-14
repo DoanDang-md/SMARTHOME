@@ -172,7 +172,7 @@ const PermissionPage: React.FC = () => {
             })}
             {users.length === 0 && (
               <p className="text-[#4a6a8a] text-sm italic text-center mt-4">
-                Không có user thường nào.
+                Không có tài khoản người dùng nào.
               </p>
             )}
           </ul>

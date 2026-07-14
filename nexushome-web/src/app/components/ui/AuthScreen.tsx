@@ -49,7 +49,7 @@ function NexusLogo() {
           className="text-[11px] mt-1 uppercase tracking-widest"
           style={{ color: "#3a5a7a", fontFamily: "'DM Mono', monospace" }}
         >
-          Smart Living OS · v2.4.1
+          Hệ điều hành nhà thông minh
         </p>
       </div>
     </div>
@@ -350,8 +350,8 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
 
           <p className="text-center text-sm mb-6" style={{ color: "#4a6a8a" }}>
             {isRegister
-              ? "Create your account to get started."
-              : "Welcome back. Sign in to continue."}
+              ? "Tạo tài khoản để bắt đầu sử dụng."
+              : "Chào mừng trở lại. Đăng nhập để tiếp tục."}
           </p>
 
           <div
@@ -363,12 +363,12 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
           >
             <ModeTab
               active={mode === "signin"}
-              label="Sign In"
+              label="Đăng nhập"
               onClick={() => setMode("signin")}
             />
             <ModeTab
               active={mode === "register"}
-              label="Create Account"
+              label="Đăng ký"
               onClick={() => setMode("register")}
             />
           </div>
@@ -386,7 +386,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5"
                 style={{ color: "#3a5a7a", fontFamily: "'DM Mono', monospace" }}
               >
-                Username
+                Tên đăng nhập
               </label>
               <GlassInput
                 type="text"
@@ -403,10 +403,10 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
                 className="block text-[10px] font-semibold uppercase tracking-widest mb-1.5"
                 style={{ color: "#3a5a7a", fontFamily: "'DM Mono', monospace" }}
               >
-                Password
+                Mật khẩu
               </label>
               <PasswordInput
-                placeholder="Enter your password"
+                placeholder="Nhập mật khẩu"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -428,7 +428,7 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               className="text-[11px] hover:text-cyan-400 transition-colors"
               style={{ color: "#3a5a7a", fontFamily: "'DM Mono', monospace" }}
             >
-              Forgot password?
+              Quên mật khẩu?
             </button>
           </div>
 
@@ -445,13 +445,13 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
             }}
           >
             {isLoading ? (
-              "Loading..."
+              "Đang xử lý..."
             ) : isRegister ? (
               <KeyRound size={15} />
             ) : (
               <ChevronRight size={15} />
             )}
-            {isLoading ? "" : isRegister ? "Register Account" : "Sign In"}
+            {isLoading ? "" : isRegister ? "Tạo tài khoản" : "Đăng nhập"}
           </button>
 
           <div className="flex items-center gap-3 my-6">
@@ -460,16 +460,16 @@ export default function AuthScreen({ onAuth }: AuthScreenProps) {
               className="text-[10px] uppercase tracking-widest text-[#2a4060]"
               style={{ fontFamily: "'DM Mono', monospace" }}
             >
-              secured by nexus
+              bảo mật NexusHome
             </span>
             <div className="flex-1 h-px bg-white/5" />
           </div>
 
           <div className="flex items-center justify-center gap-5">
             {[
-              { label: "256-bit AES", dot: "#39ff14" },
+              { label: "Mã hóa AES", dot: "#39ff14" },
               { label: "TLS 1.3", dot: "#00e5ff" },
-              { label: "Zero-trust", dot: "#a855f7" },
+              { label: "An toàn", dot: "#a855f7" },
             ].map(({ label, dot }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <span

@@ -9,6 +9,7 @@ import {
   LogOut,
   Key,
   Activity,
+  BarChart3,
 } from "lucide-react";
 import AuthScreen from "./components/ui/AuthScreen";
 import PendingUsers from "./components/figma/PendingUsers";
@@ -16,19 +17,22 @@ import Dashboard from "./components/figma/Dashboard";
 import Permission from "./components/figma/PermissionPage";
 import HistoryPage from "./components/figma/HistoryPage";
 import SettingsPage from "./components/figma/SettingsPage";
+import StatsPage from "./components/figma/StatsPage";
 
 const ADMIN_LINKS = [
-  { id: "dashboard", label: "Admin Dashboard", icon: LayoutDashboard },
-  { id: "users", label: "Users Pending", icon: Users },
-  { id: "permissions", label: "Permissions", icon: Key },
-  { id: "history", label: "Activity History", icon: Activity },
-  { id: "settings", label: "System Settings", icon: Settings },
+  { id: "dashboard", label: "Tổng quan", icon: LayoutDashboard },
+  { id: "stats", label: "Báo cáo", icon: BarChart3 },
+  { id: "users", label: "Chờ duyệt", icon: Users },
+  { id: "permissions", label: "Phân quyền", icon: Key },
+  { id: "history", label: "Lịch sử", icon: Activity },
+  { id: "settings", label: "Cài đặt", icon: Settings },
 ];
 
 const USER_LINKS = [
-  { id: "dashboard", label: "My Devices", icon: LayoutDashboard },
-  { id: "history", label: "My History", icon: Activity },
-  { id: "settings", label: "Account Settings", icon: Settings },
+  { id: "dashboard", label: "Thiết bị", icon: LayoutDashboard },
+  { id: "stats", label: "Báo cáo", icon: BarChart3 },
+  { id: "history", label: "Lịch sử", icon: Activity },
+  { id: "settings", label: "Cài đặt", icon: Settings },
 ];
 
 export default function App() {
@@ -99,7 +103,7 @@ export default function App() {
 
         <div className="mx-4 mb-5 h-[1px] bg-cyan-400/10" />
         <p className="px-6 mb-2 text-[10px] font-semibold uppercase tracking-widest text-[#2a4a6a] font-mono">
-          Navigation
+          Điều hướng
         </p>
 
         <nav className="flex-1 px-3 space-y-1">
@@ -130,7 +134,7 @@ export default function App() {
             className="w-full mt-4 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-left text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20"
           >
             <LogOut size={16} />
-            <span>Logout</span>
+            <span>Đăng xuất</span>
           </button>
         </nav>
 
@@ -141,10 +145,10 @@ export default function App() {
             </div>
             <div className="min-w-0">
               <p className="text-xs font-semibold truncate text-[#c0d8f0]">
-                Admin User
+                {userRole === "admin" ? "Quản trị viên" : "Người dùng"}
               </p>
               <p className="text-[10px] text-[#3a5a7a] font-mono">
-                admin@nexus.io
+                NexusHome
               </p>
             </div>
           </div>
@@ -172,7 +176,7 @@ export default function App() {
             }}
           >
             <h1 className="font-bold text-xl leading-none text-[#ddeeff]">
-              Pending Users Approval
+              Duyệt tài khoản
             </h1>
           </header>
           <main
@@ -195,7 +199,7 @@ export default function App() {
             }}
           >
             <h1 className="font-bold text-xl leading-none text-[#ddeeff]">
-              Device Permissions
+              Phân quyền thiết bị
             </h1>
           </header>
           <main
@@ -207,7 +211,17 @@ export default function App() {
         </div>
       )}
 
-      {/* 4. Trang Lịch sử đã được bọc thanh cuộn */}
+      {/* 4. Báo cáo thống kê (thời gian sử dụng) */}
+      {activeNav === "stats" && (
+        <div
+          className="flex-1 overflow-y-auto min-w-0 h-screen"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <StatsPage />
+        </div>
+      )}
+
+      {/* 5. Trang Lịch sử */}
       {activeNav === "history" && (
         <div
           className="flex-1 overflow-y-auto min-w-0 h-screen"
@@ -217,7 +231,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 5. Trang Cài đặt đã được bọc thanh cuộn */}
+      {/* 6. Trang Cài đặt */}
       {activeNav === "settings" && (
         <div
           className="flex-1 overflow-y-auto min-w-0 h-screen"

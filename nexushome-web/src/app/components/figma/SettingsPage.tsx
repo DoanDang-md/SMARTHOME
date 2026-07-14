@@ -149,7 +149,7 @@ export default function SettingsPage() {
     <div className="flex-1 flex flex-col p-8 overflow-y-auto">
       <header className="mb-8 flex items-center gap-3">
         <Settings size={24} className="text-cyan-400" />
-        <h1 className="text-2xl font-bold text-[#ddeeff]">System Settings</h1>
+        <h1 className="text-2xl font-bold text-[#ddeeff]">Cài đặt hệ thống</h1>
       </header>
 
       <div className="max-w-xl rounded-2xl p-6 border border-white/5 bg-[#0a1120]/80 backdrop-blur-xl shadow-2xl">

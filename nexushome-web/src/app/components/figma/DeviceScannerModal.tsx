@@ -56,14 +56,14 @@ export default function DeviceScannerModal({
       };
     if (type === 2)
       return {
-        label: "IR Blaster",
+        label: "Hồng ngoại",
         color: "text-purple-400",
         border: "border-purple-500/30",
         icon: Radio,
       };
     if (type === 3)
       return {
-        label: "Sensor",
+        label: "Cảm biến",
         color: "text-green-400",
         border: "border-green-500/30",
         icon: Activity,
@@ -117,7 +117,7 @@ export default function DeviceScannerModal({
               className="font-semibold text-lg"
               style={{ color: "#ddeeff", fontFamily: "'Exo 2', sans-serif" }}
             >
-              Scanning Devices...
+              {isScanning ? "Đang quét thiết bị…" : "Thiết bị phát hiện"}
             </h2>
           </div>
           <button
@@ -187,7 +187,7 @@ export default function DeviceScannerModal({
                       border: "1px solid rgba(0,229,255,0.3)",
                     }}
                   >
-                    <Plus size={14} /> Phê Duyệt
+                    <Plus size={14} /> Thêm
                   </button>
                 </div>
               );

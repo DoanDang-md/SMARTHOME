@@ -49,7 +49,7 @@ def read_root():
     return {"message": "Server FastAPI (OOP Architecture) đã sẵn sàng!"}
 
 # 4. Gắn các Router API
-from app.api.routes import auth, devices, ir, users, telegram, history
+from app.api.routes import auth, devices, ir, users, telegram, history, stats
 
 app.include_router(auth.router)
 app.include_router(devices.router)
@@ -57,3 +57,4 @@ app.include_router(ir.router)
 app.include_router(users.router)
 app.include_router(telegram.router)
 app.include_router(history.router)
+app.include_router(stats.router)

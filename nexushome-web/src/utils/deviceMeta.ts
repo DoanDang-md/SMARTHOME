@@ -4,7 +4,7 @@ import { Zap, Radio, Activity, Cpu, HelpCircle } from "lucide-react";
 export const getDeviceMeta = (type: number) => {
   if (type === 1)
     return {
-      label: "Relay Switch",
+      label: "Relay",
       color: "text-cyan-400",
       bg: "bg-cyan-500/10",
       border: "border-cyan-500/30",
@@ -14,7 +14,7 @@ export const getDeviceMeta = (type: number) => {
     };
   if (type === 2)
     return {
-      label: "IR Blaster",
+      label: "Hồng ngoại",
       color: "text-purple-400",
       bg: "bg-purple-500/10",
       border: "border-purple-500/30",
@@ -24,7 +24,7 @@ export const getDeviceMeta = (type: number) => {
     };
   if (type === 3)
     return {
-      label: "Sensor Node",
+      label: "Cảm biến",
       color: "text-emerald-400",
       bg: "bg-emerald-500/10",
       border: "border-emerald-500/30",
@@ -34,7 +34,7 @@ export const getDeviceMeta = (type: number) => {
     };
   if (type === 4)
     return {
-      label: "Hybrid Node",
+      label: "Hybrid",
       color: "text-orange-400",
       bg: "bg-orange-500/10",
       border: "border-orange-500/30",
@@ -44,7 +44,7 @@ export const getDeviceMeta = (type: number) => {
     };
 
   return {
-    label: "Unknown",
+    label: "Khác",
     color: "text-slate-400",
     bg: "bg-slate-500/10",
     border: "border-slate-500/30",
