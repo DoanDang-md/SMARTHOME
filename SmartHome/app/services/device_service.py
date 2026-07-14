@@ -83,11 +83,13 @@ class DeviceService:
         ]
 
     def register_device(self, device_data: schemas.DeviceCreate):
-        self._verify_admin()
+        # 1. ĐÃ XÓA dòng self._verify_admin() để cho phép User thường cũng được phép thêm thiết bị
+
         mac = _norm_mac(device_data.mac_address)
         if self._find_device_by_mac(mac):
             raise HTTPException(status_code=400, detail="MAC đã tồn tại")
 
+        # 2. Tạo thiết bị dựa trên loại phần cứng (device_type) gửi lên
         new_device = models.Device(
             name=device_data.name,
             mac_address=mac,
@@ -98,11 +100,22 @@ class DeviceService:
         self.db.commit()
         self.db.refresh(new_device)
 
+        # 3. TASK 3: TỰ ĐỘNG MAP QUYỀN CHO NGƯỜI TẠO (Nếu không phải admin)
+        if self.current_user.role != "admin":
+            user_device_link = models.DevicePermission(
+                user_id=self.current_user.id,
+                device_id=new_device.id
+            )
+            self.db.add(user_device_link)
+            self.db.commit()
+
+        # 4. Giữ nguyên logic đồng bộ với Gateway phần cứng của bạn
         if mac in gateway.discovered_nodes:
             del gateway.discovered_nodes[mac]
 
         self._push_peer_to_gateway(new_device)
-        return {"message": "Đăng ký thành công!", "device_id": new_device.id}
+        
+        return {"message": "Thêm thiết bị và tự động cấp quyền thành công!", "device_id": new_device.id}
 
     def register_from_gateway(self, data: schemas.GatewayDeviceRegister):
         """Gateway local /save — không JWT. Trùng MAC → trả device_id hiện có.

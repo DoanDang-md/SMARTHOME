@@ -224,12 +224,6 @@ export default function Dashboard() {
             sub="awaiting signal"
             color="#ff6b35"
           />
-          <StatCard
-            label="Uptime"
-            value="99.4%"
-            sub="last 30 days"
-            color="#a855f7"
-          />
         </div>
 
         <div className="flex items-center justify-between mb-5">

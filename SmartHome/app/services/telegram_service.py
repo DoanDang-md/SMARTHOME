@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 import models
 import requests
 from app.services.device_service import DeviceService
+from app.services.ai_service import SmartHomeAI
 
 
 class TelegramBotService:
@@ -49,12 +50,12 @@ class TelegramBotService:
         self._tg_post("sendMessage", payload, timeout=3.0)
 
     def process_webhook(self, update_data: dict):
-        # 1. XỬ LÝ KHI NGƯỜI DÙNG BẤM NÚT (Callback Query)
+        # 1. XỬ LÝ NÚT BẤM BẬT/TẮT TRÊN TIN NHẮN (Inline Keyboard)
         if "callback_query" in update_data:
             self._handle_button_click(update_data["callback_query"])
             return
 
-        # 2. XỬ LÝ KHI NGƯỜI DÙNG GÕ LỆNH CHỮ (Message)
+        # 2. XỬ LÝ LỆNH CHỮ & NÚT BẤM DƯỚI ĐÁY (Reply Keyboard)
         message = update_data.get("message", {})
         chat_id = str(message.get("chat", {}).get("id"))
         text = message.get("text", "").strip()
@@ -62,28 +63,95 @@ class TelegramBotService:
         if not chat_id or not text or chat_id == "None":
             return
 
-        # Xác thực: chat_id nằm trong bất kỳ liên kết nào của user
-        user = self._find_user_by_telegram(chat_id)
+        # Xác thực bảo mật User
+        user = self.db.query(models.User).filter(models.User.telegram_id == chat_id).first()
         if not user:
-            self.send_message(
-                chat_id,
-                f"⚠️ Truy cập bị từ chối! ID Telegram của bạn là {chat_id}. "
-                f"Vào web → Settings → Liên kết Telegram (có thể gắn nhiều tài khoản).",
-            )
+            self.send_message(chat_id, f"⚠️ Truy cập bị từ chối! ID Telegram của bạn là {chat_id}.")
             return
 
-        # Lệnh kích hoạt bảng điều khiển
-        if text.lower() in ["/menu", "/start"]:
-            self._send_control_menu(chat_id, user)
+        # ==========================================
+        # CÁC CÂU LỆNH TRONG BOT
+        # ==========================================
+        
+        # Gọi Menu Chính khi user mới vào bot hoặc bấm "Quay lại"
+        if text.lower() in ["/start", "/menu", "bắt đầu", "quay lại"]:
+            self._send_main_menu(chat_id)
             return
 
-        # Lệnh báo cáo trạng thái
-        if text.lower() == "/status":
+        # Xử lý khi user bấm nút nổi
+        if text == "🎛 Bảng điều khiển":
+            self._send_control_menu(chat_id, user) 
+            return
+
+        if text == "📊 Trạng thái":
             self._report_status(chat_id)
             return
+            
+        if text == "🤖 Trợ lý AI":
+            instruction_msg = (
+                "🤖 TRỢ LÝ AI NEXUSHOME\n\n"
+                "Tôi có thể hiểu các câu lệnh điều khiển bằng ngôn ngữ tự nhiên! Hãy gõ trực tiếp yêu cầu của bạn xuống khung chat.\n\n"
+                "💡 Một số ví dụ bạn có thể thử:\n"
+                "🗣️ \"Bật giúp tôi thiết bị số 1\"\n"
+                "🗣️ \"Trời tối quá, bật đèn lên đi\"\n"
+                "🗣️ \"Tắt quạt đi cho đỡ lạnh\"\n\n"
+                "Tôi đang nghe đây, Bạn cần giúp gì nào?"
+            )
+            # Thêm parse_mode="Markdown" vào hàm send_message nếu thư viện của bạn có hỗ trợ, 
+            # hoặc gửi text bình thường để Telegram tự định dạng
+            self.send_message(chat_id, instruction_msg)
+            return
+            
+        if text == "⚙️ Cài đặt":
+            self.send_message(chat_id, f"ID Telegram của bạn là: {chat_id}\nBạn có thể dùng ID này để liên kết trên Website.")
+            return
 
-        # Nếu gõ linh tinh, gợi ý các lệnh có sẵn
-        self.send_message(chat_id, "ℹ️ Vui lòng gõ /menu để mở Bảng điều khiển thiết bị, hoặc /status để xem thông số.")
+        else:
+            self.send_message(chat_id, "🤖 Đang suy nghĩ...")
+            
+            # 1. Lấy danh sách thiết bị user này CÓ QUYỀN điều khiển
+            # (Bạn có thể gọi hàm lấy thiết bị từ DeviceService hoặc tự query DB)
+            if user.role == "admin":
+                allowed_devices = self.db.query(models.Device).all()
+            else:
+                allowed_devices = self.db.query(models.Device).join(models.DevicePermission).filter(
+                    models.DevicePermission.user_id == user.id
+                ).all()
+
+            # 2. Giao cho Antigravity xử lý
+            ai_bot = SmartHomeAI()
+            ai_response = ai_bot.analyze_command(text, allowed_devices)
+
+            # 3. Nhận lệnh từ AI và thực thi phần cứng
+            target_device_id = ai_response.get("device_id")
+            action = ai_response.get("action")
+
+            if target_device_id and action in ["ON", "OFF"]:
+                print(f"[AI Lệnh] Gửi lệnh {action} tới thiết bị ID {target_device_id}")
+                
+                # Chuyển đổi trạng thái từ chữ sang số (1: ON, 0: OFF) giống hệt nút bấm
+                target_status = 1 if action == "ON" else 0
+                
+                try:
+                    # GỌI HÀM THỰC TẾ: Bắt bot chờ Gateway xử lý xong mới được nói chuyện
+                    DeviceService(self.db, user).update_status(target_device_id, target_status)
+                    
+                    # NẾU THÀNH CÔNG: Gateway online và đã bật/tắt thiết bị
+                    self.send_message(chat_id, ai_response.get("reply"))
+                    
+                except Exception as e:
+                    # NẾU THẤT BẠI: Gateway offline, timeout hoặc lỗi phần cứng
+                    error_msg = getattr(e, "detail", str(e))
+                    ai_text = ai_response.get("reply")
+                    
+                    # AI vẫn trả lời tự nhiên nhưng đính kèm báo cáo lỗi khẩn cấp
+                    warning = f"🤖 {ai_text}\n\n⚠️ **CẢNH BÁO: Lệnh điều khiển thất bại!**\nChi tiết hệ thống: {error_msg}"
+                    self.send_message(chat_id, warning)
+                    
+            else:
+                # Nếu chỉ là trò chuyện (CHAT) hoặc không tìm thấy thiết bị
+                self.send_message(chat_id, ai_response.get("reply"))
+            return
 
     # ==========================================
     # CÁC HÀM XỬ LÝ LOGIC NỘI BỘ 
@@ -184,3 +252,14 @@ class TelegramBotService:
             if d.device_type in [3, 4] and d.last_temp is not None:
                 msg += f"  ↳ Nhiệt độ: {d.last_temp}°C | Độ ẩm: {d.last_humid}%\n"
         self.send_message(chat_id, msg)
+    def _send_main_menu(self, chat_id: str, text_msg: str = "Đã mở menu chính. Chọn tác vụ bạn muốn bắt đầu:"):
+        # Bố cục mảng 2D: Mỗi list con bên trong là 1 hàng ngang
+        reply_markup = {
+            "keyboard": [
+                [{"text": "🎛 Bảng điều khiển"}, {"text": "📊 Trạng thái"}],
+                [{"text": "🤖 Trợ lý AI"}, {"text": "⚙️ Cài đặt"}]
+            ],
+            "resize_keyboard": True,  # Tự động co giãn cho vừa màn hình điện thoại
+            "is_persistent": True     # Giữ bàn phím luôn mở ở dưới đáy
+        }
+        self.send_message(chat_id, text_msg, reply_markup=reply_markup)

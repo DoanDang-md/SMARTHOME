@@ -151,10 +151,19 @@ export default function App() {
         </div>
       </aside>
       {/* ── Main Content (Nội dung thay đổi theo Menu) ──────────── */}
-      {activeNav === "dashboard" && <Dashboard />}
+      {/* 1. Trang Dashboard đã được bọc thanh cuộn */}
+      {activeNav === "dashboard" && (
+        <div
+          className="flex-1 overflow-y-auto min-w-0 h-screen"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <Dashboard />
+        </div>
+      )}
+
+      {/* 2. Trang Pending Users (Giữ nguyên của bạn vì đã chuẩn) */}
       {userRole === "admin" && activeNav === "users" && (
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Dựng riêng một Header nhỏ cho trang User để UI không bị vỡ */}
           <header
             className="flex-shrink-0 flex items-center px-8 py-6"
             style={{
@@ -174,7 +183,8 @@ export default function App() {
           </main>
         </div>
       )}
-      {/* ── Trang phân quyền ──────────── */}
+
+      {/* 3. Trang Phân quyền (Giữ nguyên của bạn vì đã chuẩn) */}
       {userRole === "admin" && activeNav === "permissions" && (
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <header
@@ -196,9 +206,26 @@ export default function App() {
           </main>
         </div>
       )}
-      {activeNav === "history" && <HistoryPage />} {/* Render HistoryPage */}
-      {/* Trang Settings có thể thêm vào đây sau */}
-      {activeNav === "settings" && <SettingsPage />}
+
+      {/* 4. Trang Lịch sử đã được bọc thanh cuộn */}
+      {activeNav === "history" && (
+        <div
+          className="flex-1 overflow-y-auto min-w-0 h-screen"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <HistoryPage />
+        </div>
+      )}
+
+      {/* 5. Trang Cài đặt đã được bọc thanh cuộn */}
+      {activeNav === "settings" && (
+        <div
+          className="flex-1 overflow-y-auto min-w-0 h-screen"
+          style={{ scrollbarWidth: "none" }}
+        >
+          <SettingsPage />
+        </div>
+      )}
     </div>
   );
 }
