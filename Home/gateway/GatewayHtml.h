@@ -318,7 +318,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   <div class="header">
     <div>
       <h1>&#127968; SmartHome Gateway</h1>
-      <div class="subtitle">Quản lý thiết bị IoT qua ESP-NOW</div>
+      <div class="subtitle">Cổng kết nối ngôi nhà thông minh</div>
     </div>
     <div style="display:flex;gap:10px;align-items:center">
       <span id="wifi-badge" class="badge">Trực tuyến</span>
@@ -365,7 +365,6 @@ const char index_html[] PROGMEM = R"rawliteral(
         </div>
         <div><button type="submit" class="btn-add" id="btn-add-node">Thêm thiết bị</button></div>
       </div>
-      <div class="hint">&#8505; ID tự động gán. Không bấm nhiều lần — MAC trùng sẽ bị từ chối.</div>
     </form>
   </div>
 

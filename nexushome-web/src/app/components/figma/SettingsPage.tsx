@@ -4,7 +4,6 @@ import {
   MessageCircle,
   CheckCircle2,
   Link as LinkIcon,
-  AlertCircle,
   Trash2,
   Plus,
 } from "lucide-react";
@@ -163,8 +162,7 @@ export default function SettingsPage() {
               Liên Kết Telegram Bot
             </h2>
             <p className="text-sm text-slate-400">
-              Một tài khoản web có thể gắn nhiều Telegram (điện thoại, máy tính,
-              người nhà…).
+              Gắn bot với điện thoại hoặc máy tính của bạn.
             </p>
           </div>
         </div>
@@ -207,39 +205,17 @@ export default function SettingsPage() {
 
         {/* Form thêm liên kết mới — luôn hiện để gắn thêm */}
         <div className="space-y-4">
-          <div className="rounded-xl p-4 bg-amber-500/10 border border-amber-500/20 flex items-start gap-3">
-            <AlertCircle
-              size={20}
-              className="text-amber-400 flex-shrink-0 mt-0.5"
-            />
-            <div className="text-sm text-amber-200/80 leading-relaxed">
-              <p className="font-bold text-amber-400 mb-1">
-                {telegrams.length > 0
-                  ? "Thêm tài khoản Telegram khác:"
-                  : "Hướng dẫn lấy ID:"}
-              </p>
-              <ol className="list-decimal ml-4 space-y-1">
-                <li>
-                  Mở Telegram, tìm <b>@userinfobot</b> (hoặc nhắn bot nhà → bot
-                  báo ID nếu chưa liên kết).
-                </li>
-                <li>Copy dải số ID.</li>
-                <li>Dán bên dưới — có thể liên kết nhiều ID cho cùng tài khoản.</li>
-              </ol>
-            </div>
-          </div>
-
           <div className="flex flex-col gap-3">
             <input
               type="text"
-              placeholder="Nhập Telegram ID (số)..."
+              placeholder="Telegram ID"
               value={telegramIdInput}
               onChange={(e) => setTelegramIdInput(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"
             />
             <input
               type="text"
-              placeholder="Nhãn (tuỳ chọn): Điện thoại, Máy tính..."
+              placeholder="Nhãn (tuỳ chọn)"
               value={labelInput}
               onChange={(e) => setLabelInput(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500/50 transition-colors"

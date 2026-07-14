@@ -34,7 +34,7 @@ BTN_HOME_CTRL = "🎛 Bảng điều khiển"
 BTN_HOME_IR = "📡 Điều khiển IR"
 BTN_HOME_STATUS = "📊 Trạng thái"
 BTN_HOME_CLIMATE = "🌡 Cảm biến"
-# Mở màn hướng dẫn AI + phím «Xóa trí nhớ» / «Quay lại» (AI chat luôn bật khi gõ text)
+# Màn trợ lý nhà + phím «Xóa trí nhớ» / «Quay lại»
 BTN_HOME_AI = "🤖 Trợ lý AI"
 BTN_AI_CLEAR = "🗑 Xóa trí nhớ"
 BTN_HOME_SETTINGS = "⚙️ Cài đặt"
@@ -268,30 +268,61 @@ class TelegramBotService:
 
     # ------------------------------------------------------------------
     # Nội dung tin (đi kèm ReplyKeyboard mỗi lần đổi màn)
+    # Chỉ mô tả nhà / dữ liệu — không dạy cách dùng (gõ chat, gán ID, …)
     # ------------------------------------------------------------------
 
-    def _text_home(self, notice: str = "") -> str:
-        body = (
-            "🏠 NEXUSHOME\n"
-            "• Gõ tiếng Việt bất kỳ → AI trả lời (luôn bật)\n"
-            "• Phím menu: điều khiển / IR / trạng thái…\n"
-            f"• {BTN_HOME_AI}: hướng dẫn AI + xóa trí nhớ"
+    def _text_home(self, user: models.User, notice: str = "") -> str:
+        """Trang chủ: giới thiệu nhà + tóm tắt thực tế (không hướng dẫn UI)."""
+        devices = self._allowed_devices(user)
+        n = len(devices)
+        n_on = sum(
+            1
+            for d in devices
+            if int(d.device_type or 0) in (1, 4) and int(d.status or 0) == 1
         )
+        n_relay = sum(1 for d in devices if int(d.device_type or 0) in (1, 4))
+        climate = [
+            d
+            for d in devices
+            if int(d.device_type or 0) in (3, 4) and d.last_temp is not None
+        ]
+
+        lines = [
+            "🏠 NEXUSHOME",
+            "Ngôi nhà thông minh của bạn — điều khiển thiết bị, cảm biến và hồng ngoại trong một chỗ.",
+            "",
+        ]
+        if n == 0:
+            lines.append("Chưa có thiết bị nào trong nhà.")
+        else:
+            lines.append(f"• {n} thiết bị trong nhà")
+            if n_relay:
+                lines.append(f"• Đang bật: {n_on}/{n_relay} công tắc · relay")
+            if climate:
+                # Lấy vài điểm T/H gần nhất
+                bits = [
+                    f"{d.name} {d.last_temp:.1f}°C"
+                    + (f" {d.last_humid:.0f}%" if d.last_humid is not None else "")
+                    for d in climate[:3]
+                ]
+                lines.append("• Khí hậu: " + " · ".join(bits))
+            else:
+                n_ir = sum(1 for d in devices if int(d.device_type or 0) == 2)
+                if n_ir:
+                    lines.append(f"• {n_ir} nút / node hồng ngoại")
+
+        body = "\n".join(lines)
         return f"{notice}\n\n{body}" if notice else body
 
     def _text_ai_guide(self, notice: str = "") -> str:
+        """Màn AI: gợi ý việc nhà (không giải thích cơ chế bot)."""
         body = (
-            "🤖 TRỢ LÝ AI — Hướng dẫn nhanh\n\n"
-            "AI luôn lắng nghe: gõ tiếng Việt vào khung chat (không cần bật thêm).\n\n"
-            "Ví dụ:\n"
-            "• «Bật đèn phòng khách»\n"
-            "• «Tắt quạt đi»\n"
-            "• «Nhiệt độ bao nhiêu?»\n"
-            "• «Gửi lệnh Power điều hòa»\n"
-            "• Trò chuyện tự nhiên — AI nhớ vài câu gần nhất\n\n"
-            "Phím dưới:\n"
-            f"· {BTN_AI_CLEAR} — xóa trí nhớ hội thoại\n"
-            f"· {BTN_BACK} — về menu chính"
+            "🤖 TRỢ LÝ NHÀ\n"
+            "Hỏi hoặc bảo việc trong nhà, ví dụ:\n"
+            "• Bật / tắt đèn, quạt\n"
+            "• Nhiệt độ, độ ẩm phòng nào đó\n"
+            "• Gửi lệnh điều hòa, TV (IR đã học)\n"
+            f"\n{BTN_AI_CLEAR} — bắt đầu hội thoại mới"
         )
         return f"{notice}\n\n{body}" if notice else body
 
@@ -301,7 +332,7 @@ class TelegramBotService:
             for d in self._allowed_devices(user)
             if int(d.device_type or 0) in (1, 3, 4)
         ]
-        lines = ["🎛 BẢNG ĐIỀU KHIỂN", "Dùng phím dưới: ⚡ BẬT / 🔌 TẮT · ◀️ Quay lại\n"]
+        lines = ["🎛 ĐIỀU KHIỂN"]
         for d in devices:
             dtype = int(d.device_type or 0)
             if dtype in (1, 4):
@@ -312,17 +343,17 @@ class TelegramBotService:
                 lines.append(line)
             elif dtype == 3:
                 lines.append(f"• {d.name}: {self._fmt_th(d)}")
-        if len(lines) <= 2:
-            lines.append("📭 Chưa có relay/hybrid/sensor.")
+        if len(lines) == 1:
+            lines.append("Chưa có thiết bị bật/tắt.")
         body = "\n".join(lines)
         return f"{notice}\n\n{body}" if notice else body
 
     def _text_ir(self, user: models.User, notice: str = "", sync: bool = False) -> str:
         devices = self._allowed_devices(user)
         ir_map = self._ir_map(devices, sync=sync)
-        lines = ["📡 ĐIỀU KHIỂN IR", "Bấm ▶️ trên phím dưới để gửi lệnh.\n"]
+        lines = ["📡 HỒNG NGOẠI"]
         if not ir_map:
-            lines.append("📭 Chưa có lệnh đã học.")
+            lines.append("Chưa có lệnh hồng ngoại.")
         else:
             for d in devices:
                 cmds = ir_map.get(int(d.id))
@@ -336,9 +367,9 @@ class TelegramBotService:
     def _text_status(self, user: models.User, notice: str = "") -> str:
         devices = self._allowed_devices(user)
         ir_map = self._ir_map(devices, sync=False)
-        lines = ["📊 TRẠNG THÁI\n"]
+        lines = ["📊 TRẠNG THÁI NHÀ"]
         if not devices:
-            lines.append("📭 Chưa có thiết bị.")
+            lines.append("Chưa có thiết bị.")
         for d in devices:
             dtype = int(d.device_type or 0)
             label = TYPE_LABEL.get(dtype, f"T{dtype}")
@@ -361,20 +392,16 @@ class TelegramBotService:
             for d in self._allowed_devices(user)
             if int(d.device_type or 0) in (3, 4)
         ]
-        lines = ["🌡💧 CẢM BIẾN\n"]
+        lines = ["🌡💧 KHÍ HẬU"]
         if not devices:
-            lines.append("📭 Không có sensor/hybrid.")
+            lines.append("Chưa có cảm biến nhiệt độ / độ ẩm.")
         for d in devices:
             lines.append(f"• {d.name}: {self._fmt_th(d)}")
         body = "\n".join(lines)
         return f"{notice}\n\n{body}" if notice else body
 
     def _text_settings(self, chat_id: str, notice: str = "") -> str:
-        body = (
-            "⚙️ CÀI ĐẶT\n"
-            f"ID Telegram: {chat_id}\n"
-            "Liên kết trên Website → Settings."
-        )
+        body = f"⚙️ CÀI ĐẶT\nTài khoản Telegram: {chat_id}"
         return f"{notice}\n\n{body}" if notice else body
 
     def _status_one(self, d: models.Device) -> str:
@@ -413,7 +440,7 @@ class TelegramBotService:
             text = self._text_settings(chat_id, notice)
         else:
             view = "home"
-            text = self._text_home(notice)
+            text = self._text_home(user, notice)
 
         kb = self._keyboard_for(view, user, sync_ir=sync_ir)
         _VIEW[str(chat_id)] = view
