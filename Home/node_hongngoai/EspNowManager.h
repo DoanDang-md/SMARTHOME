@@ -8,6 +8,9 @@
  * → Uplink (Discovery / Report / IR event) luôn gửi BROADCAST.
  * → gatewayMac_ chỉ ghi nhớ MAC Gateway từ RX (log / ensureGatewayMac).
  *
+ * Quét kênh: SCORE toàn bộ 1–13 (hits + RSSI), KHÔNG khóa first-hit.
+ * (First-hit dễ dính bleed kênh kề: GW ch7 mà node khóa ch6 → chập chờn.)
+ *
  * Thêm: lastGatewayRx, soft recover, full rescan, modem sleep OFF.
  */
 #pragma once
@@ -33,14 +36,25 @@ public:
 
 class EspNowManager {
 public:
+    /** Số lần Discovery / kênh khi score-scan */
+    static constexpr uint8_t SCAN_PROBES_PER_CH = 3;
+    /** Chờ radio ổn định sau esp_wifi_set_channel */
+    static constexpr unsigned long SCAN_SETTLE_MS = 80UL;
+    /** Tối thiểu / tối đa ms lắng nghe mỗi kênh (chia cho probes) */
+    static constexpr unsigned long SCAN_WAIT_MIN_MS = 300UL;
+    static constexpr unsigned long SCAN_WAIT_MAX_MS = 900UL;
+
     EspNowManager()
         : handler_(nullptr),
           gatewayFound_(false),
           gatewayLocked_(false),
           packetSeq_(0),
-          lastGatewayRxMs_(0) {
+          lastGatewayRxMs_(0),
+          scanActive_(false),
+          currentScanChannel_(0) {
         smarthome::EspNowConfig::copyBroadcast(gatewayMac_);
         smarthome::EspNowConfig::copyBroadcast(bcastMac_);
+        clearScanScores();
     }
 
     void setHandler(IEspNowPacketHandler* handler) { handler_ = handler; }
@@ -139,37 +153,90 @@ public:
 
     typedef void (*DiscoverySendFn)(void* ctx);
 
+    /**
+     * Auto channel scan (score-based):
+     * - Quét HẾT kênh 1–13 (không return first-hit — tránh bleed kênh kề).
+     * - Mỗi kênh: settle → N× Discovery → đếm ACK (hits) + RSSI tốt nhất.
+     * - Khóa kênh có hits cao nhất; hòa → RSSI mạnh hơn (số lớn hơn, ít âm hơn).
+     *
+     * @param waitMsPerChannel tổng thời gian lắng nghe mỗi kênh (clamp 300–900ms)
+     */
     void scanGatewayChannel(DiscoverySendFn sendDiscovery, void* ctx,
                             unsigned long waitMsPerChannel = 400) {
-        Serial.println("\n[WIFI] Đang dò tìm kênh WiFi của Gateway (Auto Channel Scanning)...");
-        gatewayFound_ = false;
+        Serial.println("\n[WIFI] Score-scan kênh Gateway (1–13, chọn best hits/RSSI)...");
+        gatewayFound_  = false;
+        gatewayLocked_ = false;
+        clearScanScores();
+        scanActive_ = true;
 
-        for (int attempt = 0; attempt < smarthome::EspNowConfig::SCAN_ATTEMPTS; ++attempt) {
+        unsigned long totalWait = waitMsPerChannel;
+        if (totalWait < SCAN_WAIT_MIN_MS) totalWait = SCAN_WAIT_MIN_MS;
+        if (totalWait > SCAN_WAIT_MAX_MS) totalWait = SCAN_WAIT_MAX_MS;
+        const unsigned long waitPerProbe =
+            totalWait / static_cast<unsigned long>(SCAN_PROBES_PER_CH);
+        // 2 vòng đủ (cũ = 5 + first-hit rất lâu / dễ khóa sai)
+        const int passes = (smarthome::EspNowConfig::SCAN_ATTEMPTS > 2)
+                               ? 2
+                               : static_cast<int>(smarthome::EspNowConfig::SCAN_ATTEMPTS);
+
+        for (int attempt = 0; attempt < passes; ++attempt) {
             for (uint8_t ch = smarthome::EspNowConfig::CHANNEL_MIN;
                  ch <= smarthome::EspNowConfig::CHANNEL_MAX; ++ch) {
-                config_.channel = ch;
+                currentScanChannel_ = ch;
+                config_.channel     = ch;
                 setWifiChannel(ch);
                 readdGatewayPeer(ch);
+                delay(SCAN_SETTLE_MS);
 
-                Serial.printf("[WIFI] Thử Kênh %d...\r", ch);
-                if (sendDiscovery != nullptr) {
-                    sendDiscovery(ctx);
-                }
+                Serial.printf("[WIFI] Thử Kênh %u (pass %d/%d)...\r",
+                              ch, attempt + 1, passes);
 
-                unsigned long startWait = millis();
-                // IR: poll 50ms khi wait dài (giữ hành vi firmware cũ)
-                const unsigned long step = (waitMsPerChannel >= 1000) ? 50UL : 20UL;
-                while (millis() - startWait < waitMsPerChannel) {
-                    delay(step);
-                    if (gatewayFound_) {
-                        Serial.printf("\n[WIFI] >>> ĐÃ TÌM THẤY GATEWAY TẠI KÊNH SỐ %d! <<<\n", ch);
-                        return;
+                for (uint8_t p = 0; p < SCAN_PROBES_PER_CH; ++p) {
+                    if (sendDiscovery != nullptr) {
+                        sendDiscovery(ctx);
+                    }
+                    const unsigned long startWait = millis();
+                    while (millis() - startWait < waitPerProbe) {
+                        delay(10);  // nhường RX callback
                     }
                 }
             }
         }
-        Serial.printf("\n[WIFI] Cảnh báo: Không thấy Gateway sau %d vòng. Giữ kênh %d.\n",
-                      smarthome::EspNowConfig::SCAN_ATTEMPTS, config_.channel);
+
+        scanActive_           = false;
+        currentScanChannel_   = 0;
+
+        // Log mọi kênh có tín hiệu (debug bleed kênh kề)
+        for (uint8_t ch = smarthome::EspNowConfig::CHANNEL_MIN;
+             ch <= smarthome::EspNowConfig::CHANNEL_MAX; ++ch) {
+            if (scanHits_[ch] > 0) {
+                Serial.printf("\n[WIFI]  score ch=%u hits=%u best_rssi=%d",
+                              ch, scanHits_[ch], static_cast<int>(scanBestRssi_[ch]));
+            }
+        }
+        Serial.println();
+
+        const uint8_t bestCh = pickBestScanChannel();
+        if (bestCh != 0) {
+            config_.channel = bestCh;
+            setWifiChannel(bestCh);
+            readdGatewayPeer(bestCh);
+            gatewayFound_ = true;
+            lockGatewayMac(scanMac_[bestCh]);
+            Serial.printf("[WIFI] >>> CHỌN KÊNH %u (hits=%u rssi=%d) — bỏ first-hit <<<\n",
+                          bestCh, scanHits_[bestCh],
+                          static_cast<int>(scanBestRssi_[bestCh]));
+            // Confirm nhanh trên kênh thắng
+            if (sendDiscovery != nullptr) {
+                delay(SCAN_SETTLE_MS);
+                sendDiscovery(ctx);
+                delay(120);
+            }
+            return;
+        }
+
+        Serial.printf("[WIFI] Cảnh báo: Không thấy Gateway sau score-scan. Giữ kênh %u.\n",
+                      config_.channel);
     }
 
     void rescanGatewayChannel(DiscoverySendFn sendDiscovery, void* ctx,
@@ -330,17 +397,61 @@ private:
                       gwMac[0], gwMac[1], gwMac[2], gwMac[3], gwMac[4], gwMac[5], config_.channel);
     }
 
-    void handleRecv(const uint8_t* srcMac, const uint8_t* data, int len) {
+    void clearScanScores() {
+        memset(scanHits_, 0, sizeof(scanHits_));
+        for (uint8_t i = 0; i < 14; ++i) {
+            scanBestRssi_[i] = -128;  // unknown / worst
+            memset(scanMac_[i], 0xFF, 6);
+        }
+    }
+
+    /** Chọn kênh thắng: max hits; hòa → RSSI cao hơn. 0 = không có. */
+    uint8_t pickBestScanChannel() const {
+        uint8_t bestCh   = 0;
+        uint16_t bestHits = 0;
+        int8_t bestRssi  = -128;
+        for (uint8_t ch = smarthome::EspNowConfig::CHANNEL_MIN;
+             ch <= smarthome::EspNowConfig::CHANNEL_MAX; ++ch) {
+            if (scanHits_[ch] == 0) continue;
+            const bool betterHits = scanHits_[ch] > bestHits;
+            const bool tieHitsBetterRssi =
+                (scanHits_[ch] == bestHits) && (scanBestRssi_[ch] > bestRssi);
+            if (betterHits || tieHitsBetterRssi) {
+                bestCh   = ch;
+                bestHits = scanHits_[ch];
+                bestRssi = scanBestRssi_[ch];
+            }
+        }
+        return bestCh;
+    }
+
+    /**
+     * @param rssi dBm từ rx_ctrl (ESP32); -128 = không có (ESP8266 / unknown)
+     */
+    void handleRecv(const uint8_t* srcMac, const uint8_t* data, int len, int8_t rssi = -128) {
         if (len != static_cast<int>(sizeof(EspNowPacket))) return;
 
         EspNowPacket packet;
         memcpy(&packet, data, sizeof(packet));
 
-        // Chỉ lock / đánh dấu tìm thấy khi đúng chiều GW→Node
         if (isGatewayToNodeCommand(packet.command)) {
-            gatewayFound_    = true;
-            lastGatewayRxMs_ = millis();
-            lockGatewayMac(srcMac);
+            if (scanActive_) {
+                // Chỉ ghi điểm kênh đang probe — KHÔNG lock first-hit
+                const uint8_t ch = currentScanChannel_;
+                if (ch >= smarthome::EspNowConfig::CHANNEL_MIN
+                    && ch <= smarthome::EspNowConfig::CHANNEL_MAX) {
+                    scanHits_[ch]++;
+                    if (rssi > scanBestRssi_[ch]) {
+                        scanBestRssi_[ch] = rssi;
+                    }
+                    memcpy(scanMac_[ch], srcMac, 6);
+                }
+                lastGatewayRxMs_ = millis();
+            } else {
+                gatewayFound_    = true;
+                lastGatewayRxMs_ = millis();
+                lockGatewayMac(srcMac);
+            }
         }
 
         if (handler_ != nullptr) {
@@ -351,20 +462,24 @@ private:
 #if defined(ESP8266)
     static void recvThunk8266(uint8_t* mac, uint8_t* incomingData, uint8_t len) {
         if (instance_ != nullptr) {
-            instance_->handleRecv(mac, incomingData, static_cast<int>(len));
+            instance_->handleRecv(mac, incomingData, static_cast<int>(len), -128);
         }
     }
 #elif defined(ESP32)
 #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(3, 0, 0)
     static void recvThunk32_v3(const esp_now_recv_info* info, const uint8_t* incomingData, int len) {
         if (instance_ != nullptr && info != nullptr) {
-            instance_->handleRecv(info->src_addr, incomingData, len);
+            int8_t rssi = -128;
+            if (info->rx_ctrl != nullptr) {
+                rssi = info->rx_ctrl->rssi;
+            }
+            instance_->handleRecv(info->src_addr, incomingData, len, rssi);
         }
     }
 #else
     static void recvThunk32_v2(const uint8_t* mac, const uint8_t* incomingData, int len) {
         if (instance_ != nullptr) {
-            instance_->handleRecv(mac, incomingData, len);
+            instance_->handleRecv(mac, incomingData, len, -128);
         }
     }
 #endif
@@ -380,4 +495,11 @@ private:
     bool gatewayLocked_;
     uint16_t packetSeq_;
     unsigned long lastGatewayRxMs_;
+
+    // ---- Score-scan state ----
+    bool     scanActive_;
+    uint8_t  currentScanChannel_;
+    uint16_t scanHits_[14];      // index = channel 1..13
+    int8_t   scanBestRssi_[14];
+    uint8_t  scanMac_[14][6];
 };

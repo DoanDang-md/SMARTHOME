@@ -24,9 +24,12 @@
 #define IR_STORAGE_NS "ir_store"
 #endif
 
-/** IR scan: firmware cũ chờ ~5000ms mỗi kênh (không 400ms như Relay). */
+/**
+ * Score-scan: tổng ms lắng nghe / kênh (chia 3 probes, clamp 300–900 trong manager).
+ * Cũ = 5000ms first-hit → rất chậm + dễ khóa bleed kênh kề (VD ch6 thay ch7).
+ */
 #ifndef IR_SCAN_WAIT_MS
-#define IR_SCAN_WAIT_MS 5000UL
+#define IR_SCAN_WAIT_MS 450UL
 #endif
 
 /**

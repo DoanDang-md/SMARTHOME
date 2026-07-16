@@ -83,7 +83,8 @@ const char wifi_setup_html[] PROGMEM = R"rawliteral(
 <body>
   <div class="card">
     <h2>Cài đặt Gateway</h2>
-    <p class="sub">Chọn WiFi nhà bạn, nhập mật khẩu và địa chỉ máy chạy Backend (FastAPI).</p>
+    <p class="sub">Chọn WiFi nhà bạn, nhập mật khẩu và địa chỉ máy chạy Backend (FastAPI).<br>
+      Sau khi vào mạng: mở <b>http://gateway.local</b> (không cần nhớ IP).</p>
 
     <form id="setup-form" action="/save_wifi" method="POST" accept-charset="UTF-8">
       <label>1. Mạng WiFi</label>
@@ -318,7 +319,7 @@ const char index_html[] PROGMEM = R"rawliteral(
   <div class="header">
     <div>
       <h1>&#127968; SmartHome Gateway</h1>
-      <div class="subtitle">Cổng kết nối ngôi nhà thông minh</div>
+      <div class="subtitle">Cổng kết nối ngôi nhà thông minh · <span style="color:#22d3ee">http://gateway.local</span></div>
     </div>
     <div style="display:flex;gap:10px;align-items:center">
       <span id="wifi-badge" class="badge">Trực tuyến</span>

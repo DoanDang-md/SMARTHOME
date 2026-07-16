@@ -99,11 +99,22 @@ public:
         serializeJson(doc, body);
         int code = http.POST(body);
         http.end();
-        return (code == 200 || code == 201);
+        const bool ok = (code == 200 || code == 201);
+        if (!ok) {
+            // Log thưa: HTTPClient fail thường -1 (timeout) hoặc 0 khi BE down
+            static unsigned long s_lastFailLogMs = 0;
+            const unsigned long now = millis();
+            if (now - s_lastFailLogMs >= 5000UL) {
+                s_lastFailLogMs = now;
+                Serial.printf("[BE] postSensor FAIL http=%d url=%s\n",
+                              code, urlSensors_.c_str());
+            }
+        }
+        return ok;
     }
 
-    void discoverDevice(uint8_t* mac, uint8_t type) {
-        if (WiFi.status() != WL_CONNECTED) return;
+    void discoverDevice(const uint8_t* mac, uint8_t type) {
+        if (WiFi.status() != WL_CONNECTED || mac == nullptr) return;
         HTTPClient http;
         http.setTimeout(2500);
         http.begin(urlDiscover_);

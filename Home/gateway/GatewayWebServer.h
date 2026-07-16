@@ -223,12 +223,16 @@ private:
                    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
                    "<title>Đã lưu</title>"
                    "<style>body{font-family:sans-serif;padding:28px;background:#0f172a;color:#e2e8f0}"
-                   "h2{color:#22c55e}.m{color:#94a3b8;line-height:1.5}</style></head><body>"
+                   "h2{color:#22c55e}.m{color:#94a3b8;line-height:1.5}"
+                   "code{color:#22d3ee;background:#1e293b;padding:2px 8px;border-radius:6px}</style></head><body>"
                    "<h2>Đã lưu cấu hình!</h2>"
                    "<p class=\"m\">WiFi: <b>")
             + ssid + "</b><br>Backend: <b>" + BackendClient::normalizeBaseUrl(backend)
             + "</b></p>"
             + "<p class=\"m\">Gateway đang khởi động lại và kết nối mạng nhà bạn…</p>"
+            + "<p class=\"m\">Sau vài giây, mở bảng điều khiển: "
+              "<code>http://gateway.local</code> "
+              "(cùng WiFi nhà; nếu không mở được thì dùng IP LAN trên Serial).</p>"
             + "</body></html>";
         sendHtml(200, okHtml);
         delay(1500);

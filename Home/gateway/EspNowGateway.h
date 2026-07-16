@@ -174,7 +174,14 @@ private:
         }
 #endif
         if (xQueueSend(rxQueue_, &packet, 0) != pdTRUE) {
-            Serial.println("[ESP-NOW] CẢNH BÁO: rxQueue đầy, mất gói (UI vẫn cập nhật realtime nếu registered)");
+            // Rate-limit log (tránh spam khi BE kẹt / queue đầy)
+            static unsigned long s_lastFullLogMs = 0;
+            const unsigned long now = millis();
+            if (now - s_lastFullLogMs >= 2000UL) {
+                s_lastFullLogMs = now;
+                Serial.println("[ESP-NOW] CẢNH BÁO: rxQueue đầy, mất gói queue "
+                               "(UI registry vẫn realtime; ACK trễ — kiểm tra Backend/Task_ServerSync)");
+            }
         }
     }
 
